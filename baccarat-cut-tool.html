@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>バカラ 上限超過ベット カット計算</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2230; --line: #2c3848;
+    --txt: #e6edf3; --sub: #8b98a8; --accent: #4da3ff;
+    --player: #ef4444; --banker: #3b82f6;
+    --warn: #f59e0b; --ok: #22c55e; --remainder: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: var(--sub); font-size: 13px; margin-bottom: 18px; }
+  .meta b { color: var(--txt); }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .version { color: var(--sub); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .help-btn { background: #364150; padding: 8px 18px; }
+  [hidden] { display: none !important; }
+  .help-content { line-height: 1.7; }
+  .help-content h2 { font-size: 18px; margin: 0 0 8px; }
+  .help-content h3 { font-size: 15px; margin: 18px 0 6px; color: var(--accent); }
+  .help-content ul { margin: 6px 0; padding-left: 22px; }
+  .help-content li { margin: 5px 0; }
+  .help-content b { color: var(--txt); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+  .settings { display: flex; gap: 24px; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .setting { display: flex; flex-direction: column; gap: 5px; }
+  .setting label { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .setting input { width: 120px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+  th { color: var(--sub); font-weight: 600; font-size: 13px; }
+  th:first-child, td:first-child { text-align: center; }
+  input {
+    width: 96px; padding: 7px 9px; background: #0d1620; color: var(--txt);
+    border: 1px solid var(--line); border-radius: 6px; font-size: 15px; text-align: right;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  input.bad { border-color: var(--warn); background: #2a1d05; }
+  .col-p { color: var(--player); }
+  .col-b { color: var(--banker); }
+  .cut-head { font-size: 12px; opacity: 0.85; }
+  .cut-cell { font-variant-numeric: tabular-nums; color: var(--sub); font-size: 14px; white-space: nowrap; min-width: 92px; }
+  .cut-cell.has-cut { color: var(--ok); font-weight: 700; }
+  .actions { display: flex; gap: 10px; align-items: center; margin: 14px 0 4px; }
+  button {
+    padding: 10px 22px; font-size: 15px; font-weight: 600; border-radius: 8px;
+    border: none; cursor: pointer; color: #fff;
+  }
+  button.calc { background: var(--accent); }
+  button.clear { background: #364150; }
+  button:active { transform: translateY(1px); }
+  .hint { color: var(--sub); font-size: 13px; }
+  .results { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .side h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .summary { font-size: 13px; color: var(--sub); margin-bottom: 10px; }
+  .summary div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .summary b { color: var(--txt); }
+  .nocut { color: var(--ok); }
+  .cut { color: var(--warn); }
+  .remainder-box {
+    background: #2a2305; border: 1px solid var(--remainder); border-radius: 8px;
+    padding: 10px 12px; margin: 10px 0; color: var(--remainder); font-size: 13px; font-weight: 600;
+  }
+  .remainder-box div { padding: 2px 0; }
+  .remainder-box b { color: #fff; }
+  .rtable td { font-variant-numeric: tabular-nums; }
+  .rtable tfoot td { font-weight: 700; color: var(--txt); border-top: 2px solid var(--accent); border-bottom: none; }
+  .rtable tr.cand td { background: #2a2305; }
+  .fixed-mark { color: var(--remainder); font-size: 11px; margin-left: 4px; }
+  .refund { color: var(--ok); }
+  .errors { color: var(--warn); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .empty { color: var(--sub); font-style: italic; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #364150; color: var(--sub); }
+
+  /* --- narrow / portrait phones --- */
+  @media (max-width: 480px) {
+    body { padding: 10px; font-size: 14px; }
+    .card { padding: 12px; }
+    .settings { gap: 12px; }
+    .setting input { width: 100%; }
+    #inputTable { table-layout: fixed; width: 100%; }
+    #inputTable th:first-child, #inputTable td:first-child { width: 22px; }
+    th, td { padding: 7px 3px; }
+    th { font-size: 11px; }
+    .cut-head { font-size: 10px; }
+    .unit { display: none; }
+    input { width: 100%; min-width: 0; padding: 8px 5px; font-size: 16px; }
+    .cut-cell { min-width: 0; font-size: 12px; }
+    .rtable td, .rtable th { padding: 7px 4px; font-size: 13px; }
+  }
+
+  /* --- training mode --- */
+  .topbar-btns { display: flex; gap: 8px; }
+  .train-top { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .train-group { display: flex; gap: 6px; align-items: center; }
+  .train-group > span { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .pill { background: #364150; color: var(--sub); padding: 6px 12px; font-size: 14px; border-radius: 8px; }
+  .pill.active { background: var(--accent); color: #fff; }
+  .train-status { display: flex; flex-wrap: wrap; gap: 18px; color: var(--sub); font-size: 14px; margin-bottom: 12px; }
+  .train-status b { color: var(--txt); }
+  .problem-meta { display: flex; flex-wrap: wrap; gap: 18px; font-size: 15px; margin-bottom: 12px; }
+  .problem-meta b { color: var(--txt); }
+  .ratio-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ratio-wrap input { width: 110px; }
+  .ans-input { width: 96px; }
+  .feedback { margin-top: 14px; min-height: 18px; }
+  .fb-banner { padding: 10px 12px; border-radius: 8px; font-weight: 700; margin-bottom: 10px; }
+  .fb-ok { background: #0e2a16; border: 1px solid var(--ok); color: #86efac; }
+  .fb-ng { background: #2a1d05; border: 1px solid var(--warn); color: #fcd34d; }
+  .judge-ok { color: var(--ok); font-weight: 700; }
+  .judge-ng { color: var(--warn); font-weight: 700; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat-card { background: #0d1620; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .stat-card .lbl { color: var(--sub); font-size: 12px; }
+  .stat-card .val { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span class="version">v2026-06-13</span>
+    <div class="topbar-btns">
+      <button class="help-btn" id="trainBtn">練習</button>
+      <button class="help-btn" id="helpBtn">使い方</button>
+    </div>
+  </div>
+
+  <div id="calcView">
+  <div class="card">
+    <div class="settings">
+      <div class="setting">
+        <label for="limitInput">賭け先ごとの上限ベット ($)</label>
+        <input id="limitInput" type="number" inputmode="numeric" min="10" step="10" value="5000">
+      </div>
+      <div class="setting">
+        <label for="guaranteeInput">最低ベット保障 ($)</label>
+        <input id="guaranteeInput" type="number" inputmode="numeric" min="0" step="10" value="300">
+      </div>
+    </div>
+    <table id="inputTable">
+      <thead>
+        <tr>
+          <th>席</th>
+          <th>ベット額<span class="unit"> ($)</span></th>
+          <th class="cut-head">カット数</th>
+        </tr>
+      </thead>
+      <tbody><!-- rows injected --></tbody>
+    </table>
+    <div class="actions">
+      <button class="clear" id="clearBtn">クリア</button>
+    </div>
+    <div class="errors" id="errors"></div>
+  </div>
+
+  <div class="results">
+    <div class="card side">
+      <h2>カット結果</h2>
+      <div id="res"><div class="empty">ベット額を入力すると結果が表示されます。</div></div>
+    </div>
+  </div>
+  </div><!-- /calcView -->
+
+  <div id="helpView" hidden>
+    <div class="card help-content">
+      <h2>使い方</h2>
+
+      <p>このツールは、<b>本来は頭の中で計算してカットする</b>ところを、その<b>答え合わせ</b>に使うためのものです。</p>
+
+      <h3>基本設定</h3>
+      <ul>
+        <li><b>ベット入力</b>：8席。各席に1つのベット額を入力します（空欄＝ベットなし）。$10刻みで入力します。</li>
+        <li><b>賭け先ごとの上限ベット</b>：テーブルの上限額。合計がこれを超えるとカット計算が動きます。設定欄で変更可。</li>
+        <li><b>最低ベット保障</b>：カットされても各客に最低限残す額。設定欄で変更可。<br>※最低保証の合計が上限を超える設定にすると、按分できず計算停止になります。</li>
+      </ul>
+
+      <h3>カットのルール</h3>
+      <ul>
+        <li>各席の<b>カット数</b>を<b>$100 単位・四捨五入</b>（ちょうど $50 は切り上げ）で決めます。最低保証で固定された席だけは「ベット − 保障」のカットになります。</li>
+        <li>有効ベット合計が<b>上限を超えることはありません</b>。四捨五入でわずかに足りない場合は、<b>一番大きく賭けた席</b>からカットを $100 ずつ足して上限以下に収めます。</li>
+        <li>それでも上限ちょうどにならず<b>上限まで少し残る場合</b>があります。その差額は自動調整せず、<b>どの席を上げるかは人間が最終判断</b>します（差額を画面に表示します）。</li>
+      </ul>
+
+      <h3>カット数の見方</h3>
+      <ul>
+        <li>入力欄の右隣に各席の<b>カット数</b>を緑でリアルタイム表示します。</li>
+        <li>「<b>—</b>」はカットなし、またはベットなしです。</li>
+      </ul>
+
+      <h3>入力のコツ</h3>
+      <ul>
+        <li>数値は入力するたびに自動で再計算されます（<b>Enter</b> キーでも計算できます）。</li>
+        <li>「クリア」はベット欄だけを消し、上限・最低保証の設定値は残します。</li>
+      </ul>
+
+      <h3>下の詳細表</h3>
+      <ul>
+        <li>ベット合計・カット率・有効ベット合計、席ごとのベット／有効ベット／カット数を表示します。<br>カット率は<b>全体</b>（カット数合計÷ベット合計）と<b>対象席のみ</b>（保障席を除いた実カット率）の2種を併記します。</li>
+        <li>表の<b>最下行</b>に、ベット合計・有効ベット合計・カット数合計をまとめて表示します。</li>
+        <li>「保障」マークは最低保証で固定された席です。</li>
+      </ul>
+
+      <h3>練習モード</h3>
+      <ul>
+        <li>右上の「<b>練習</b>」で、出題された問題を自分でカットして答え合わせができます。能力向上が目的です。</li>
+        <li><b>レベル</b>：Lv1=カット率の概算 → Lv2=各席のカット数 → Lv3=保障あり → Lv4=端数の戻し先まで、と段階的に難しくなります。</li>
+        <li><b>モード</b>：「レベル選択」は自分で級を選ぶ／「自動昇格」は3問連続正解で級が上がり、2問連続不正解で下がります。</li>
+        <li>採点は各席<b>±$100</b>以内で正解とし、「○席中○席正解」と各席のずれを表示します（Lv1は%なら±2pt、割なら四捨五入一致）。</li>
+        <li>レベル別の正答率・累計出題数・最大連続正解は端末に保存され、次回も引き継がれます。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div id="trainView" hidden>
+    <div class="card">
+      <div class="train-top">
+        <div class="train-group">
+          <span>モード</span>
+          <button class="pill" data-mode="manual" id="modeManual">レベル選択</button>
+          <button class="pill" data-mode="auto" id="modeAuto">自動昇格</button>
+        </div>
+        <div class="train-group" id="levelGroup">
+          <span>レベル</span>
+          <button class="pill" data-level="1">Lv1</button>
+          <button class="pill" data-level="2">Lv2</button>
+          <button class="pill" data-level="3">Lv3</button>
+          <button class="pill" data-level="4">Lv4</button>
+        </div>
+      </div>
+      <div class="train-status" id="trainStatus"></div>
+      <div id="problemArea"></div>
+      <div class="actions">
+        <button class="calc" id="gradeBtn">採点</button>
+        <button class="clear" id="nextBtn" hidden>次の問題 →</button>
+      </div>
+      <div class="errors" id="trainErrors"></div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:16px;margin:0 0 10px;">学習の進捗</h2>
+      <div id="statsArea"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SEATS = 8;
+const INPUT_UNIT = 10;   // bets are entered in $10 steps
+const UNIT100 = 100;     // cut granularity ($100 units)
+
+// ---- build input rows ----
+const tbody = document.querySelector('#inputTable tbody');
+for (let s = 1; s <= SEATS; s++) {
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td>${s}</td>` +
+    `<td><input type="number" inputmode="numeric" data-bet data-seat="${s}" min="0" step="10" placeholder="-"></td>` +
+    `<td class="cut-cell" data-seat="${s}">—</td>`;
+  tbody.appendChild(tr);
+}
+
+const fmt = n => '$' + n.toLocaleString('en-US');
+
+// ---- validation ----
+function readBets() {
+  const inputs = document.querySelectorAll('input[data-bet]');
+  const bets = [];
+  const errors = [];
+  inputs.forEach(inp => {
+    inp.classList.remove('bad');
+    const raw = inp.value.trim();
+    if (raw === '') return;
+    const amt = Number(raw);
+    const seat = Number(inp.dataset.seat);
+    if (!Number.isFinite(amt) || amt <= 0) { return; }
+    if (amt % INPUT_UNIT !== 0) { errors.push(`席${seat}: $${amt} は$10刻みではありません`); inp.classList.add('bad'); return; }
+    bets.push({ seat, amount: amt });
+  });
+  return { bets, errors };
+}
+
+const roundUnit = (x, u) => Math.round(x / u) * u;
+
+// ---- core computation (single pool) ----
+function computeSide(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  // iterative constrained pro-rata with minimum guarantee floor -> rawEff (sums to L)
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  // overflow guard: if guaranteed floors alone exceed the limit, the cut is impossible
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  let active = bets.slice();
+  const fixedSeats = new Set();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+      fixedSeats.add(b.seat);
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // The cut amount itself is the rounded quantity ($100 units). The remaining
+  // effective bet is derived as bet - cut, so it stays on a $10 step.
+  const betOf = {}; bets.forEach(b => betOf[b.seat] = b.amount);
+  const maxCut = {}; bets.forEach(b => maxCut[b.seat] = b.amount - floor[b.seat]); // floor keeps eff >= guarantee
+  const cut = {};
+
+  // 1) per-seat cut: guarantee-fixed seats keep bet - floor (not rounded);
+  //    others round the proportional cut to $100 (四捨五入, .50 up), clamped to [0, maxCut].
+  bets.forEach(b => {
+    if (fixedSeats.has(b.seat)) {
+      cut[b.seat] = maxCut[b.seat];
+    } else {
+      const r = roundUnit(betOf[b.seat] - rawEff[b.seat], UNIT100);
+      cut[b.seat] = Math.max(0, Math.min(r, maxCut[b.seat]));
+    }
+  });
+
+  const cutSum = () => bets.reduce((s, b) => s + cut[b.seat], 0);
+  const required = T - L; // total that must be cut so effective <= L
+
+  // 2) never exceed the limit: if rounding under-cut, take an extra $100 from the
+  //    largest bet that still has headroom (ties -> lowest seat number).
+  let safety = 0;
+  while (cutSum() < required && safety++ <= bets.length * 100) {
+    const cand = bets
+      .filter(b => cut[b.seat] < maxCut[b.seat])
+      .sort((a, b) => b.amount - a.amount || a.seat - b.seat)[0];
+    if (!cand) break; // no headroom (floors already absorb everything)
+    cut[cand.seat] = Math.min(cut[cand.seat] + UNIT100, maxCut[cand.seat]);
+  }
+
+  // 3) defensive monotonicity guard: bigger bet must not get a smaller cut.
+  //    Bump the larger-bet seat by $100 (stays <= limit) until order is restored.
+  let guard = 0;
+  while (guard++ <= bets.length * bets.length) {
+    let fixed = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount > b.amount && cut[a.seat] < cut[b.seat] && cut[a.seat] < maxCut[a.seat]) {
+          cut[a.seat] = Math.min(cut[a.seat] + UNIT100, maxCut[a.seat]);
+          fixed = true;
+        }
+      }
+    }
+    if (!fixed) break;
+  }
+
+  // a seat pushed down to its guarantee floor (by the bump/guard steps) is also
+  // guarantee-bound: mark it 保障 so its non-$100 cut (= bet - 保障) is explained.
+  const rows = bets.map(b => ({
+    seat: b.seat, amount: b.amount,
+    effective: b.amount - cut[b.seat], cut: cut[b.seat],
+    fixed: fixedSeats.has(b.seat) ||
+           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0)
+  }));
+  const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
+  const diff = effectiveTotal - L; // + : over limit (should not happen), - : under limit
+
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
+}
+
+// ---- render result (single pool) ----
+function renderSide(res, L, GUARANTEE) {
+  if (res.state === 'none') {
+    return `<div class="empty">ベットがありません。</div>`;
+  }
+
+  if (res.state === 'overflow') {
+    return `<div class="remainder-box" style="background:#2a0f0f;border-color:var(--banker);color:#fca5a5;">`
+         + `<div>⚠ 計算できません。最低保証の合計 <b>${fmt(res.floorSum)}</b> が上限 <b>${fmt(L)}</b> を超えています。</div>`
+         + `<div>このベット構成では全員に最低保証 ${fmt(GUARANTEE)} を渡すと上限を超えるため按分できません。上限を上げるか最低保証を下げてください。</div>`
+         + `</div>`;
+  }
+
+  let html = '';
+  html += `<div class="summary">`;
+  html += `<div><span>ベット合計 (T)</span><b>${fmt(res.T)}</b></div>`;
+  if (res.state === 'nocut') {
+    html += `<div><span>上限 ${fmt(L)} 以内</span><b class="nocut">カットなし</b></div>`;
+  } else {
+    const overallRatio = res.cutTotal / res.T;
+    html += `<div><span>カット率（全体: カット数合計 / ベット合計）</span><b class="cut">${(overallRatio * 100).toFixed(2)}%</b></div>`;
+    // cut-target rate: exclude guarantee-fixed seats from both numerator and denominator
+    const targetBet = res.rows.reduce((s, r) => r.fixed ? s : s + r.amount, 0);
+    const targetCut = res.rows.reduce((s, r) => r.fixed ? s : s + r.cut, 0);
+    if (targetBet > 0) {
+      const targetRatio = targetCut / targetBet;
+      html += `<div><span>カット率（対象席のみ・保障席を除く）</span><b class="cut">${(targetRatio * 100).toFixed(2)}%（約${Math.round(targetRatio * 10)}割カット）</b></div>`;
+    }
+    let effSuffix = '（上限ちょうど）';
+    if (res.diff > 0) effSuffix = `（上限 ${fmt(L)} を +${fmt(res.diff)} 超過）`;
+    else if (res.diff < 0) effSuffix = `（上限 ${fmt(L)} まで −${fmt(-res.diff)}）`;
+    html += `<div><span>有効ベット合計</span><b>${fmt(res.effectiveTotal)}${effSuffix}</b></div>`;
+  }
+  html += `</div>`;
+
+  // rounding leftover (always on the safe side: effective <= limit) — human judgement, no auto-adjust
+  if (res.state === 'cut' && res.diff < 0) {
+    html += `<div class="remainder-box">`
+          + `<div>⚠ 四捨五入の結果、有効ベット合計が上限まで <b>−${fmt(-res.diff)}</b> 残っています（合計 ${fmt(res.effectiveTotal)} / 上限 ${fmt(L)}）。</div>`
+          + `<div>この差は自動調整しません。<b>どの席を上げるかは人間が最終判断</b>してください。</div>`
+          + `</div>`;
+  }
+
+  // detail table with totals row
+  html += `<table class="rtable"><thead><tr>`
+        + `<th>席</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
+        + `</tr></thead><tbody>`;
+  res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
+    const mark = r.fixed ? `<span class="fixed-mark">保障</span>` : '';
+    html += `<tr>`
+          + `<td>${r.seat}</td>`
+          + `<td>${fmt(r.amount)}</td>`
+          + `<td>${fmt(r.effective)}${mark}</td>`
+          + `<td class="refund">${r.cut > 0 ? fmt(r.cut) : '—'}</td>`
+          + `</tr>`;
+  });
+  html += `</tbody>`;
+  const betTotal = res.rows.reduce((s, r) => s + r.amount, 0);
+  const effTotal = res.rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = res.rows.reduce((s, r) => s + r.cut, 0);
+  html += `<tfoot><tr>`
+        + `<td>合計</td>`
+        + `<td>${fmt(betTotal)}</td>`
+        + `<td>${fmt(effTotal)}</td>`
+        + `<td>${cutTotal > 0 ? fmt(cutTotal) : '—'}</td>`
+        + `</tr></tfoot>`;
+  html += `</table>`;
+  return html;
+}
+
+// ---- read & validate settings ----
+function readSettings() {
+  const limitEl = document.getElementById('limitInput');
+  const guarEl = document.getElementById('guaranteeInput');
+  limitEl.classList.remove('bad');
+  guarEl.classList.remove('bad');
+  const errors = [];
+
+  const L = Number(limitEl.value.trim());
+  const GUARANTEE = Number(guarEl.value.trim());
+
+  if (!Number.isFinite(L) || L <= 0) { errors.push('上限ベットは正の数で入力してください'); limitEl.classList.add('bad'); }
+  else if (L % INPUT_UNIT !== 0) { errors.push(`上限ベット $${L} は$10刻みではありません`); limitEl.classList.add('bad'); }
+
+  if (!Number.isFinite(GUARANTEE) || GUARANTEE < 0) { errors.push('最低保証は0以上の数で入力してください'); guarEl.classList.add('bad'); }
+  else if (GUARANTEE % INPUT_UNIT !== 0) { errors.push(`最低保証 $${GUARANTEE} は$10刻みではありません`); guarEl.classList.add('bad'); }
+
+  return { L, GUARANTEE, errors };
+}
+
+// ---- inline cut cells next to each input ----
+function updateInlineCuts(res) {
+  const cells = {};
+  document.querySelectorAll('.cut-cell').forEach(c => cells[c.dataset.seat] = c);
+  Object.values(cells).forEach(c => { c.textContent = '—'; c.className = 'cut-cell'; });
+  if (!res || res.state !== 'cut') return;
+  res.rows.forEach(r => {
+    const c = cells[r.seat];
+    if (!c) return;
+    if (r.cut > 0) {
+      c.className = 'cut-cell has-cut';
+      c.textContent = fmt(r.cut);
+    }
+  });
+}
+
+function clearInlineCuts() {
+  document.querySelectorAll('.cut-cell').forEach(c => { c.textContent = '—'; c.className = 'cut-cell'; });
+}
+
+// ---- run ----
+function calculate() {
+  const s = readSettings();
+  const b = readBets();
+  const allErrors = [...s.errors, ...b.errors];
+  document.getElementById('errors').textContent =
+    allErrors.length ? '⚠ ' + allErrors.join(' / ') : '';
+
+  if (s.errors.length) {
+    document.getElementById('res').innerHTML = '<div class="empty">設定値を直してください。</div>';
+    clearInlineCuts();
+    return;
+  }
+
+  const res = computeSide(b.bets, s.L, s.GUARANTEE);
+  document.getElementById('res').innerHTML = renderSide(res, s.L, s.GUARANTEE);
+  updateInlineCuts(res);
+}
+
+function clearAll() {
+  document.querySelectorAll('input[data-bet]').forEach(i => { i.value = ''; i.classList.remove('bad'); });
+  document.getElementById('errors').textContent = '';
+  document.getElementById('res').innerHTML = '<div class="empty">ベット額を入力すると結果が表示されます。</div>';
+  clearInlineCuts();
+}
+
+document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+// ===== view switching: calc / help / train =====
+const views = {
+  calc: document.getElementById('calcView'),
+  help: document.getElementById('helpView'),
+  train: document.getElementById('trainView'),
+};
+const trainBtn = document.getElementById('trainBtn');
+const helpBtn = document.getElementById('helpBtn');
+let currentView = 'calc';
+function setView(target) {
+  currentView = target;
+  for (const k in views) views[k].toggleAttribute('hidden', k !== target);
+  trainBtn.textContent = target === 'train' ? '← 計算に戻る' : '練習';
+  helpBtn.textContent = target === 'help' ? '← 計算に戻る' : '使い方';
+  if (target === 'train' && !train.problem) startSession();
+}
+trainBtn.addEventListener('click', () => setView(currentView === 'train' ? 'calc' : 'train'));
+helpBtn.addEventListener('click', () => setView(currentView === 'help' ? 'calc' : 'help'));
+
+// real-time recompute while typing in the calculator only
+document.querySelectorAll('#calcView input').forEach(i => i.addEventListener('input', calculate));
+// Enter: calculate in calc view, grade / advance in train view
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (currentView === 'calc') calculate();
+  else if (currentView === 'train') { train.answered ? advanceTrain() : gradeAnswer(); }
+});
+
+// ===================== TRAINING MODE =====================
+const SESSION_LEN = 10;
+const PROMOTE_STREAK = 3;   // consecutive correct -> level up (auto mode)
+const DEMOTE_STREAK = 2;    // consecutive wrong -> level down (auto mode)
+const CUT_TOL = 100;        // ±$100 per seat
+const PCT_TOL = 2;          // ±2 percentage points (Lv1 % input)
+const PROGRESS_KEY = 'baccarat-train-progress-v1';
+
+let train = {
+  mode: 'manual', level: 1, ratioUnit: '%',
+  qIndex: 0, sessionCorrect: 0, streakCorrect: 0, streakWrong: 0,
+  problem: null, answered: false, levelMsg: '',
+};
+
+function loadProgress() {
+  try { const raw = localStorage.getItem(PROGRESS_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
+  return { perLevel: { 1:{asked:0,correct:0}, 2:{asked:0,correct:0}, 3:{asked:0,correct:0}, 4:{asked:0,correct:0} }, totalAsked: 0, bestStreak: 0 };
+}
+let progress = loadProgress();
+function saveProgress() { try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) {} }
+
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[randInt(0, arr.length - 1)];
+
+// generate a level-appropriate problem, using computeSide as the answer key
+function genProblem(level) {
+  const tryOnce = strict => {
+    const L = pick([3000, 4000, 5000, 6000, 8000]);
+    const G = pick([100, 200, 300, 500]);
+    const N = level <= 2 ? randInt(3, 4) : level === 3 ? randInt(4, 5) : randInt(4, 6);
+    const maxBet = Math.floor(L * 0.7 / 10);
+    const bets = [];
+    for (let s = 1; s <= N; s++) bets.push({ seat: s, amount: randInt(8, maxBet) * 10 });
+    const T = bets.reduce((a, b) => a + b.amount, 0);
+    if (T <= L) return null;                         // must exceed the limit
+    const res = computeSide(bets, L, G);
+    if (res.state !== 'cut') return null;
+    const anyFixed = res.rows.some(r => r.fixed);
+    if (level <= 2 && anyFixed) return null;         // Lv1/2: nobody hits the floor
+    if (strict) {
+      if (level === 3 && !anyFixed) return null;     // Lv3: at least one floored seat
+      if (level === 4 && res.diff >= 0) return null; // Lv4: must leave a remainder
+    }
+    return { L, G, bets, res };
+  };
+  for (let i = 0; i < 800; i++) { const p = tryOnce(true); if (p) return p; }
+  for (let i = 0; i < 800; i++) { const p = tryOnce(false); if (p) return p; }
+  return null;
+}
+
+function setMode(mode) {
+  train.mode = mode;
+  train.streakCorrect = 0; train.streakWrong = 0;   // fresh streak on mode switch
+  document.getElementById('modeManual').classList.toggle('active', mode === 'manual');
+  document.getElementById('modeAuto').classList.toggle('active', mode === 'auto');
+  document.getElementById('levelGroup').style.display = mode === 'manual' ? '' : 'none';
+}
+function setLevel(level) {
+  train.level = level;
+  document.querySelectorAll('#levelGroup .pill').forEach(b =>
+    b.classList.toggle('active', Number(b.dataset.level) === level));
+}
+
+function startSession() {
+  train.qIndex = 0; train.sessionCorrect = 0; train.streakCorrect = 0; train.streakWrong = 0;
+  nextProblem();
+}
+function advanceTrain() { if (train.qIndex >= SESSION_LEN) startSession(); else nextProblem(); }
+
+function nextProblem() {
+  train.problem = genProblem(train.level);
+  train.answered = false;
+  train.levelMsg = '';
+  document.getElementById('feedback').innerHTML = '';
+  document.getElementById('trainErrors').textContent = '';
+  document.getElementById('gradeBtn').hidden = false;
+  document.getElementById('nextBtn').hidden = true;
+  renderStatus(); renderProblem(); renderStats();
+}
+
+function renderStatus() {
+  const modeLabel = train.mode === 'auto' ? '自動昇格' : 'レベル選択';
+  document.getElementById('trainStatus').innerHTML =
+    `<span>モード <b>${modeLabel}</b></span>` +
+    `<span>レベル <b>Lv${train.level}</b></span>` +
+    `<span>問題 <b>${Math.min(train.qIndex + 1, SESSION_LEN)} / ${SESSION_LEN}</b></span>` +
+    `<span>連続正解 <b>${train.streakCorrect}</b></span>`;
+}
+
+const LEVEL_DESC = {
+  1: 'カット率（全体で約何割カットするか）を入力してください。',
+  2: '各席のカット数（$100単位）を入力してください。',
+  3: '保障に掛かる席があります。各席のカット数を入力してください。',
+  4: '端数（残り）が出る問題です。各席のカット数を入力し、残りをどの席に戻すか選んでください。',
+};
+
+function renderProblem() {
+  const p = train.problem;
+  const area = document.getElementById('problemArea');
+  if (!p) { area.innerHTML = '<div class="empty">問題を生成できませんでした。「次の問題」を押してください。</div>'; return; }
+
+  let html = `<div class="problem-meta">`
+    + `<span>上限 <b>${fmt(p.L)}</b></span>`
+    + `<span>最低保証 <b>${fmt(p.G)}</b></span>`
+    + `<span>ベット合計 <b>${fmt(p.res.T)}</b></span></div>`;
+  html += `<div class="hint" style="margin-bottom:10px;">Lv${train.level}: ${LEVEL_DESC[train.level]}</div>`;
+
+  if (train.level === 1) {
+    html += `<table class="rtable"><thead><tr><th>席</th><th>ベット</th></tr></thead><tbody>`;
+    p.bets.forEach(b => html += `<tr><td>${b.seat}</td><td>${fmt(b.amount)}</td></tr>`);
+    html += `</tbody></table>`;
+    html += `<div class="ratio-wrap" style="margin-top:12px;">`
+      + `<span class="hint">カット率（概算）</span>`
+      + `<input type="number" inputmode="decimal" id="ratioInput" step="0.1" placeholder="-">`
+      + `<button class="pill ${train.ratioUnit === '%' ? 'active' : ''}" data-unit="%">%</button>`
+      + `<button class="pill ${train.ratioUnit === '割' ? 'active' : ''}" data-unit="割">割</button></div>`;
+  } else {
+    html += `<table class="rtable"><thead><tr><th>席</th><th>ベット</th><th>カット数（入力）</th></tr></thead><tbody>`;
+    p.bets.forEach(b =>
+      html += `<tr><td>${b.seat}</td><td>${fmt(b.amount)}</td>`
+        + `<td><input class="ans-input" type="number" inputmode="numeric" step="100" min="0" data-cut data-seat="${b.seat}" placeholder="-"></td></tr>`);
+    html += `</tbody></table>`;
+    if (train.level === 4) {
+      const cutSeats = p.res.rows.filter(r => r.cut > 0).map(r => r.seat).sort((a, b) => a - b);
+      html += `<div class="ratio-wrap" style="margin-top:12px;">`
+        + `<span class="hint">残り <b>${fmt(-p.res.diff)}</b> を戻す席</span>`
+        + `<select id="remSeat" class="ans-input" style="width:auto;padding:7px 9px;background:#0d1620;color:var(--txt);border:1px solid var(--line);border-radius:6px;">`
+        + `<option value="">選択</option>`
+        + cutSeats.map(s => `<option value="${s}">席${s}</option>`).join('')
+        + `</select></div>`;
+    }
+  }
+  area.innerHTML = html;
+
+  if (train.level === 1) {
+    document.querySelectorAll('#problemArea [data-unit]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        train.ratioUnit = btn.dataset.unit;
+        document.querySelectorAll('#problemArea [data-unit]').forEach(b =>
+          b.classList.toggle('active', b.dataset.unit === train.ratioUnit));
+      }));
+  }
+}
+
+function gradeAnswer() {
+  if (!train.problem || train.answered) return;
+  const p = train.problem, level = train.level;
+  let pass, fbHtml;
+
+  if (level === 1) {
+    const el = document.getElementById('ratioInput');
+    const v = Number((el.value || '').trim());
+    if ((el.value || '').trim() === '' || !Number.isFinite(v)) {
+      document.getElementById('trainErrors').textContent = '⚠ カット率を入力してください';
+      return;
+    }
+    const target = (p.res.T - p.L) / p.res.T;
+    const tgtPct = target * 100, tgtWari = Math.round(target * 10);
+    pass = train.ratioUnit === '%' ? Math.abs(v - tgtPct) <= PCT_TOL : Math.round(v) === tgtWari;
+    fbHtml = `<div>あなたの解答: <b>${v}${train.ratioUnit}</b></div>`
+      + `<div>正解: <b>${tgtPct.toFixed(1)}%</b> ≒ <b>約${tgtWari}割</b>`
+      + (train.ratioUnit === '%' ? `（許容 ±${PCT_TOL}pt）` : `（四捨五入した割が一致で正解）`) + `</div>`;
+  } else {
+    const inputs = {};
+    document.querySelectorAll('#problemArea input[data-cut]').forEach(i => inputs[i.dataset.seat] = i);
+    const sorted = p.res.rows.slice().sort((a, b) => a.seat - b.seat);
+    let okCount = 0, rows = '';
+    sorted.forEach(r => {
+      const raw = inputs[r.seat] ? (inputs[r.seat].value || '').trim() : '';
+      const val = raw === '' ? 0 : Number(raw);
+      const diff = val - r.cut;
+      const ok = Math.abs(diff) <= CUT_TOL;
+      if (ok) okCount++;
+      const mark = r.fixed ? '<span class="fixed-mark">保障</span>' : '';
+      rows += `<tr><td>${r.seat}</td><td>${fmt(r.amount)}</td>`
+        + `<td>${raw === '' ? '—' : fmt(val)}</td>`
+        + `<td>${fmt(r.cut)}${mark}</td>`
+        + `<td class="${ok ? 'judge-ok' : 'judge-ng'}">${ok ? '○' : '× ' + (diff > 0 ? '+' : '') + fmt(diff)}</td></tr>`;
+    });
+    const N = sorted.length;
+    let seatPass = okCount === N, remNote = '';
+    if (level === 4) {
+      const sel = document.getElementById('remSeat');
+      const chosen = sel ? sel.value : '';
+      const validSeats = p.res.rows.filter(r => r.cut > 0).map(r => String(r.seat));
+      const remOk = validSeats.includes(chosen);
+      remNote = `<div style="margin-top:6px;">残り <b>${fmt(-p.res.diff)}</b> を戻す席: `
+        + `あなた <b>${chosen ? '席' + chosen : '未選択'}</b> → `
+        + `<span class="${remOk ? 'judge-ok' : 'judge-ng'}">${remOk ? '○ 妥当' : '× カットされた席を選んでください'}</span>`
+        + `（カットされた席ならどこでも可）</div>`;
+      seatPass = seatPass && remOk;
+    }
+    pass = seatPass;
+    fbHtml = `<table class="rtable"><thead><tr><th>席</th><th>ベット</th><th>あなた</th><th>正解</th><th>判定</th></tr></thead>`
+      + `<tbody>${rows}</tbody></table>`
+      + `<div style="margin-top:8px;">正解した席: <b>${okCount} / ${N}</b>（各席 ±${fmt(CUT_TOL)} 許容）</div>` + remNote;
+  }
+
+  train.answered = true;
+  recordResult(pass);
+  let banner = pass ? `<div class="fb-banner fb-ok">○ 正解！</div>`
+                    : `<div class="fb-banner fb-ng">× 不正解 — 正解を確認しましょう</div>`;
+  if (train.levelMsg) banner += `<div class="hint" style="margin-bottom:10px;">${train.levelMsg}</div>`;
+  let summary = '';
+  if (train.qIndex >= SESSION_LEN) {
+    summary = `<div class="fb-banner fb-ok" style="margin-top:10px;">セッション終了！ ${SESSION_LEN}問中 <b>${train.sessionCorrect}</b>問正解</div>`;
+    document.getElementById('nextBtn').textContent = '新しいセッション →';
+  } else {
+    document.getElementById('nextBtn').textContent = '次の問題 →';
+  }
+  document.getElementById('feedback').innerHTML = banner + fbHtml + summary;
+  document.getElementById('trainErrors').textContent = '';
+  document.getElementById('gradeBtn').hidden = true;
+  document.getElementById('nextBtn').hidden = false;
+  renderStatus(); renderStats();
+}
+
+function recordResult(pass) {
+  train.qIndex++;
+  const lv = train.level;
+  progress.perLevel[lv].asked++;
+  if (pass) progress.perLevel[lv].correct++;
+  progress.totalAsked++;
+  if (pass) { train.sessionCorrect++; train.streakCorrect++; train.streakWrong = 0; }
+  else { train.streakWrong++; train.streakCorrect = 0; }
+  if (train.streakCorrect > progress.bestStreak) progress.bestStreak = train.streakCorrect;
+  train.levelMsg = '';
+  if (train.mode === 'auto') {
+    if (train.streakCorrect >= PROMOTE_STREAK && train.level < 4) {
+      setLevel(train.level + 1); train.streakCorrect = 0;
+      train.levelMsg = `🔼 レベルアップ！ Lv${lv} → Lv${train.level}`;
+    } else if (train.streakWrong >= DEMOTE_STREAK && train.level > 1) {
+      setLevel(train.level - 1); train.streakWrong = 0;
+      train.levelMsg = `🔽 レベルダウン Lv${lv} → Lv${train.level}`;
+    }
+  }
+  saveProgress();
+}
+
+function renderStats() {
+  let cards = '';
+  for (let lv = 1; lv <= 4; lv++) {
+    const s = progress.perLevel[lv];
+    const acc = s.asked ? Math.round(s.correct / s.asked * 100) : 0;
+    cards += `<div class="stat-card"><div class="lbl">Lv${lv} 正答率</div>`
+      + `<div class="val">${s.asked ? acc + '%' : '—'}</div><div class="lbl">${s.correct}/${s.asked}</div></div>`;
+  }
+  cards += `<div class="stat-card"><div class="lbl">累計出題</div><div class="val">${progress.totalAsked}</div></div>`;
+  cards += `<div class="stat-card"><div class="lbl">最大連続正解</div><div class="val">${progress.bestStreak}</div></div>`;
+  document.getElementById('statsArea').innerHTML = `<div class="stat-grid">${cards}</div>`;
+}
+
+// wire training controls
+document.querySelectorAll('#trainView [data-mode]').forEach(b =>
+  b.addEventListener('click', () => { setMode(b.dataset.mode); }));
+document.querySelectorAll('#levelGroup .pill').forEach(b =>
+  b.addEventListener('click', () => { setLevel(Number(b.dataset.level)); train.streakCorrect = 0; train.streakWrong = 0; nextProblem(); }));
+document.getElementById('gradeBtn').addEventListener('click', gradeAnswer);
+document.getElementById('nextBtn').addEventListener('click', advanceTrain);
+setMode('manual'); setLevel(1); renderStats();
+</script>
+</body>
+</html>
