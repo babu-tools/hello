@@ -529,7 +529,7 @@ function validateLG(L, GUARANTEE) {
   if (!Number.isFinite(L) || L <= 0) errors.push('上限ベットは正の数で入力してください');
   else if (L % INPUT_UNIT !== 0) errors.push(`上限ベット $${L} は$10刻みではありません`);
   if (!Number.isFinite(GUARANTEE) || GUARANTEE < 0) errors.push('最低保証は0以上の数で入力してください');
-  else if (GUARANTEE % INPUT_UNIT !== 0) errors.push(`最低保証 $${GUARANTEE} は$10刻みではありません`);
+  else if (GUARANTEE % UNIT100 !== 0) errors.push(`最低保証 $${GUARANTEE} は$100刻みで入力してください`);
   return errors;
 }
 
@@ -637,7 +637,7 @@ function loadPrefs() {
         })).map((p, i) => ({
           label: p.label,
           limit: Number.isFinite(p.limit) ? p.limit : DEFAULT_PRESETS[i].limit,
-          guar: Number.isFinite(p.guar) ? p.guar : DEFAULT_PRESETS[i].guar,
+          guar: Number.isFinite(p.guar) ? Math.round(p.guar / 100) * 100 : DEFAULT_PRESETS[i].guar,
           scale: (p.scale === 1 || p.scale === 100) ? p.scale : DEFAULT_PRESETS[i].scale,
         }));
       }
@@ -673,8 +673,8 @@ function renderSettings() {
     + `<div class="preset-fields">`
     + `<div class="preset-field"><label>上限 ($)</label>`
     + `<input class="p-limit" data-idx="${i}" type="number" inputmode="numeric" min="10" step="10" value="${p.limit}"></div>`
-    + `<div class="preset-field"><label>最低保証 ($)</label>`
-    + `<input class="p-guar" data-idx="${i}" type="number" inputmode="numeric" min="0" step="10" value="${p.guar}"></div>`
+    + `<div class="preset-field"><label>最低保証 ($/100刻み)</label>`
+    + `<input class="p-guar" data-idx="${i}" type="number" inputmode="numeric" min="0" step="100" value="${p.guar}"></div>`
     + `<div class="preset-field"><label>入力単位</label>`
     + `<div class="unit-opts">`
     + `<label><input class="p-unit" type="radio" name="unit-${i}" data-idx="${i}" value="100"${p.scale === 100 ? ' checked' : ''}>1 = $100</label>`
