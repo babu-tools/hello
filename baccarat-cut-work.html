@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="検索">
+<link rel="apple-touch-icon" href="icon.png">
+<title>検索</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2230; --line: #2c3848;
+    --txt: #e6edf3; --sub: #8b98a8; --accent: #4da3ff;
+    --player: #ef4444; --banker: #3b82f6;
+    --warn: #f59e0b; --ok: #22c55e; --remainder: #fbbf24; --cutnum: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: var(--sub); font-size: 13px; margin-bottom: 18px; }
+  .meta b { color: var(--txt); }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .version { color: var(--sub); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .help-btn { background: #364150; padding: 8px 18px; }
+  [hidden] { display: none !important; }
+  #coverView { position: fixed; inset: 0; background: #fff; z-index: 1000; }
+  #hideZone  { position: fixed; top: 0; right: 0; width: 64px; height: 64px;
+               z-index: 1001; background: transparent; }
+  .help-content { line-height: 1.7; }
+  .help-content h2 { font-size: 18px; margin: 0 0 8px; }
+  .help-content h3 { font-size: 15px; margin: 18px 0 6px; color: var(--accent); }
+  .help-content ul { margin: 6px 0; padding-left: 22px; }
+  .help-content li { margin: 5px 0; }
+  .help-content b { color: var(--txt); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+  .settings { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .setting { display: flex; flex-direction: column; gap: 5px; }
+  .setting label { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .setting input { width: 120px; }
+  /* preset chip on main */
+  .preset-chip { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 12px;
+    background: #0d1620; border: 1px solid var(--accent); border-radius: 10px; color: var(--txt); }
+  .preset-chip-label { font-size: 24px; font-weight: 800; color: var(--accent); line-height: 1; min-width: 22px; text-align: center; }
+  .preset-chip-sub { font-size: 12px; font-weight: 600; color: var(--sub); }
+  /* settings / preset page */
+  .settings-title { font-size: 18px; margin: 0 0 6px; }
+  .settings-lead { margin: 0 0 14px; line-height: 1.6; }
+  .preset-row { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line);
+    border-radius: 10px; margin-bottom: 10px; background: #0d1620; }
+  .preset-row.selected { border-color: var(--accent); background: #11233a; }
+  .preset-pick { flex: 0 0 auto; width: 44px; height: 44px; padding: 0; font-size: 20px; font-weight: 800;
+    background: #1a2230; border: 1px solid var(--line); color: var(--sub); border-radius: 10px; }
+  .preset-row.selected .preset-pick { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .preset-fields { display: flex; gap: 14px; flex: 1 1 auto; flex-wrap: wrap; }
+  .preset-field { display: flex; flex-direction: column; gap: 4px; }
+  .preset-field label { color: var(--sub); font-size: 12px; font-weight: 600; }
+  .preset-field input { width: 110px; }
+  .unit-opts { display: flex; gap: 12px; align-items: center; }
+  .unit-opts label { display: flex; align-items: center; gap: 4px; color: var(--txt);
+    font-size: 14px; font-weight: 600; cursor: pointer; }
+  .unit-opts input { width: auto; }
+  .settings-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+  th { color: var(--sub); font-weight: 600; font-size: 13px; }
+  th:first-child, td:first-child { text-align: center; }
+  input {
+    width: 96px; padding: 7px 9px; background: #0d1620; color: var(--txt);
+    border: 1px solid var(--line); border-radius: 6px; font-size: 15px; text-align: right;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  input.bad { border-color: var(--warn); background: #2a1d05; }
+  .col-p { color: var(--player); }
+  .col-b { color: var(--banker); }
+  .cut-head { font-size: 12px; opacity: 0.85; }
+  .cut-cell { font-variant-numeric: tabular-nums; color: var(--sub); font-size: 14px; white-space: nowrap; min-width: 92px; }
+  .cut-cell.has-cut { color: var(--cutnum); font-weight: 700; }
+  .seat-num { cursor: pointer; user-select: none; }
+  .seat-num:active { color: var(--accent); }
+  #clearBtn { margin-left: auto; align-self: flex-end; }
+  button {
+    padding: 10px 22px; font-size: 15px; font-weight: 600; border-radius: 8px;
+    border: none; cursor: pointer; color: #fff;
+  }
+  button.calc { background: var(--accent); }
+  button.clear { background: #364150; }
+  button:active { transform: translateY(1px); }
+  .hint { color: var(--sub); font-size: 13px; }
+  .results { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .side h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+  .stat { background:#0d1620; border:1px solid var(--line); border-radius:10px;
+          padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+  .stat-eff { border-color: var(--ok); }
+  .stat-label { color: var(--sub); font-size:12px; font-weight:600; }
+  .stat-val { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
+  .stat-eff .stat-val { color: var(--ok); }
+  .stat-cut .stat-val { color: var(--cutnum); }
+  .stat-note { font-size:12px; }
+  .stat-note.ok-note { color: var(--ok); }
+  .stat-note.cut-note { color: var(--warn); }
+  .rates { margin-bottom: 12px; }
+  .rate { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .rate:last-child { border-bottom: none; }
+  .rate-main { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .rate-main span { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .rate-main b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .rate-desc { color: var(--sub); font-size: 11px; margin-top: 2px; }
+  .nocut { color: var(--ok); }
+  .cut { color: var(--warn); }
+  .remainder-box {
+    background: #2a2305; border: 1px solid var(--remainder); border-radius: 8px;
+    padding: 10px 12px; margin: 10px 0; color: var(--remainder); font-size: 13px; font-weight: 600;
+  }
+  .remainder-box div { padding: 2px 0; }
+  .remainder-box b { color: #fff; }
+  .rtable td { font-variant-numeric: tabular-nums; }
+  .rtable tfoot td { font-weight:800; font-size:16px; color:var(--txt);
+    border-top:2px solid var(--accent); border-bottom:none; background:#182230;
+    padding-top:12px; padding-bottom:12px; }
+  .rtable tfoot td:first-child { color: var(--accent); }
+  .rtable tfoot td.cutnum { color: var(--cutnum); }
+  .rtable td.eff-col { color: var(--ok); }
+  .rtable tfoot td.eff-col { color: var(--ok); }
+  .rtable tr.cand td { background: #2a2305; }
+  .fixed-mark { color: var(--remainder); font-size: 11px; margin-left: 4px; }
+  .refund { color: var(--cutnum); }
+  .errors { color: var(--warn); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .empty { color: var(--sub); font-style: italic; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #364150; color: var(--sub); }
+
+  /* --- narrow / portrait phones --- */
+  @media (max-width: 480px) {
+    body { padding: 10px; font-size: 14px; }
+    .card { padding: 12px; }
+    .settings { gap: 12px; }
+    .setting input { width: 100%; }
+    #inputTable { table-layout: fixed; width: 100%; }
+    #inputTable th:first-child, #inputTable td:first-child { width: 22px; }
+    th, td { padding: 7px 3px; }
+    th { font-size: 11px; }
+    .cut-head { font-size: 10px; }
+    .unit { display: block; font-size: 9px; font-weight: 400; opacity: 0.8; }
+    input { width: 100%; min-width: 0; padding: 8px 5px; font-size: 16px; }
+    .cut-cell { min-width: 0; font-size: 12px; }
+    .rtable td, .rtable th { padding: 7px 4px; font-size: 13px; }
+    .stats { grid-template-columns: 1fr; gap: 8px; }
+    .stat { padding: 10px 12px; flex-direction: row; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; }
+    .stat-label { font-size: 13px; }
+    .stat-val { font-size: 22px; }
+    .stat-note { width: 100%; text-align: right; }
+    .rtable tfoot td { font-size: 15px; }
+    .preset-field input { width: 100%; }
+    .preset-field { flex: 1 1 40%; }
+    .preset-fields { gap: 10px; }
+  }
+
+</style>
+</head>
+<body>
+<div id="coverView"></div>
+<div id="hideZone" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="topbar">
+    <button class="help-btn" id="helpBtn">使い方</button>
+  </div>
+
+  <div id="calcView">
+  <div class="card">
+    <div class="settings">
+      <button id="presetChip" class="preset-chip" type="button" title="タップで設定（プリセット切替）">
+        <span class="preset-chip-label" id="presetChipLabel">A</span>
+        <span class="preset-chip-sub">プリセット ▸</span>
+      </button>
+      <input id="limitInput" type="hidden" value="3000">
+      <input id="guaranteeInput" type="hidden" value="300">
+      <button class="clear" id="clearBtn">クリア</button>
+    </div>
+    <table id="inputTable">
+      <thead>
+        <tr>
+          <th>席</th>
+          <th>ベット額<span class="unit"> (1=$100)</span></th>
+          <th class="cut-head">カット数</th>
+        </tr>
+      </thead>
+      <tbody><!-- rows injected --></tbody>
+    </table>
+    <div class="errors" id="errors"></div>
+  </div>
+
+  <div class="results">
+    <div class="card side">
+      <h2>カット結果</h2>
+      <div id="res"><div class="empty">ベット額を入力すると結果が表示されます。</div></div>
+    </div>
+  </div>
+  </div><!-- /calcView -->
+
+  <div id="helpView" hidden>
+    <div class="card help-content">
+      <h2>使い方</h2>
+
+      <p>このツールは、<b>本来は頭の中で計算してカットする</b>ところを、その<b>答え合わせ</b>に使うためのものです。</p>
+
+      <h3>基本設定</h3>
+      <ul>
+        <li><b>ベット入力</b>：8席。各席に1つのベット額を入力します（空欄＝ベットなし）。<b>入力単位はプリセットごとに設定</b>します（<b>表ヘッダーの換算式を確認</b>してください）。新タイプ＝100ドルを100（例: $460 → 460）、旧タイプ＝100ドルを1（例: $460 → 4.6）。いずれも$10刻みで入力してください。</li>
+        <li><b>プリセット（A〜D）</b>：上限ベットと最低保証の組み合わせを4つ用意しています。メイン左上の<b>記号（例「A」）をタップ</b>すると設定ページが開き、A〜Dを選んで<b>「適用」</b>で切り替えます。各プリセットの上限／保証はそこで編集でき、<b>入力単位</b>も設定ページで切り替え可。選んだ内容は次回起動時も保持されます。</li>
+        <li><b>賭け先ごとの上限ベット</b>：テーブルの上限額。合計がこれを超えるとカット計算が動きます。</li>
+        <li><b>最低ベット保障</b>：カットされても各客に最低限残す額。<br>※最低保証の合計が上限を超える設定にすると、按分できず計算停止になります。</li>
+      </ul>
+
+      <h3>カットのルール</h3>
+      <ul>
+        <li>各席の<b>カット数</b>を<b>$100 単位・四捨五入</b>（ちょうど $50 は切り上げ）で決めます。最低保証で固定された席だけは「ベット − 保障」のカットになります。</li>
+        <li>有効ベット合計が<b>上限を超えることはありません</b>。四捨五入でわずかに足りない場合は、<b>一番大きく賭けた席</b>からカットを $100 ずつ足して上限以下に収めます。</li>
+        <li>それでも上限ちょうどにならず<b>上限まで少し残る場合</b>があります。その差額は自動調整せず、<b>どの席を上げるかは人間が最終判断</b>します（差額を画面に表示します）。</li>
+      </ul>
+
+      <h3>カット数の見方</h3>
+      <ul>
+        <li>入力欄の右隣に各席の<b>カット数</b>を緑でリアルタイム表示します。</li>
+        <li>「<b>—</b>」はカットなし、またはベットなしです。</li>
+      </ul>
+
+      <h3>入力のコツ</h3>
+      <ul>
+        <li>数値は入力するたびに自動で再計算されます（<b>Enter</b> キーでも計算できます）。</li>
+        <li>「クリア」はベット欄だけを消し、上限・最低保証の設定値は残します。</li>
+        <li><b>席番号をタップ</b>すると、その席のベットだけを消せます。</li>
+      </ul>
+
+      <h3>下の詳細表</h3>
+      <ul>
+        <li>ベット合計・カット率・有効ベット合計、席ごとのベット／有効ベット／カット数を表示します。<br>カット率は<b>全体</b>（カット数合計÷ベット合計）と<b>対象席のみ</b>（保障席を除いた実カット率）の2種を併記します。</li>
+        <li>表の<b>最下行</b>に、ベット合計・有効ベット合計・カット数合計をまとめて表示します。</li>
+        <li>「保障」マークは最低保証で固定された席です。</li>
+      </ul>
+
+    </div>
+  </div>
+
+  <div id="settingsView" hidden>
+    <div class="card">
+      <h2 class="settings-title">設定 / プリセット</h2>
+      <p class="hint settings-lead">使う卓のプリセットを選んで「適用」を押してください。各プリセットの上限／最低保証はここで編集できます（自動保存）。</p>
+      <div id="presetList"><!-- preset rows injected --></div>
+      <div class="errors" id="settingsError"></div>
+      <div class="settings-actions">
+        <button class="calc" id="settingsApply">適用</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SEATS = 8;
+const INPUT_UNIT = 10;   // bets are computed in $10 steps (dollars)
+const UNIT100 = 100;     // cut granularity ($100 units)
+let currentBetScale = 1;
+
+// ---- build input rows ----
+const tbody = document.querySelector('#inputTable tbody');
+for (let s = 1; s <= SEATS; s++) {
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td class="seat-num" data-seat="${s}" title="タップでこの席をクリア">${s}</td>` +
+    `<td><input type="number" inputmode="decimal" data-bet data-seat="${s}" min="0" step="0.1" placeholder="-"></td>` +
+    `<td class="cut-cell" data-seat="${s}">—</td>`;
+  tbody.appendChild(tr);
+}
+
+// tap a seat number to clear just that seat
+tbody.addEventListener('click', e => {
+  const cell = e.target.closest('.seat-num');
+  if (!cell) return;
+  const inp = tbody.querySelector(`input[data-bet][data-seat="${cell.dataset.seat}"]`);
+  if (inp) { inp.value = ''; inp.classList.remove('bad'); }
+  calculate();
+});
+
+const fmt = n => '$' + n.toLocaleString('en-US');
+
+// ---- validation ----
+function readBets() {
+  const inputs = document.querySelectorAll('input[data-bet]');
+  const bets = [];
+  const errors = [];
+  inputs.forEach(inp => {
+    inp.classList.remove('bad');
+    const raw = inp.value.trim();
+    if (raw === '') return;
+    const val = Number(raw);
+    const seat = Number(inp.dataset.seat);
+    if (!Number.isFinite(val) || val <= 0) { return; }
+    const amt = Math.round(val * currentBetScale);
+    if (amt % INPUT_UNIT !== 0) { errors.push(currentBetScale === 100 ? `席${seat}: ${raw} は0.1単位（=$10）で入力してください` : `席${seat}: ${raw} は10単位（=$10）で入力してください`); inp.classList.add('bad'); return; }
+    bets.push({ seat, amount: amt });
+  });
+  return { bets, errors };
+}
+
+const roundUnit = (x, u) => Math.round(x / u) * u;
+
+// ---- core computation (single pool) ----
+function computeSide(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  // iterative constrained pro-rata with minimum guarantee floor -> rawEff (sums to L)
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  // overflow guard: if guaranteed floors alone exceed the limit, the cut is impossible
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  let active = bets.slice();
+  const fixedSeats = new Set();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+      fixedSeats.add(b.seat);
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // ---- per-seat cut: $10-unit fine adjustment within each seat's "no-$100-break" 枠 ----
+  // Guarantee-fixed seats cut to their floor (bet - 保障; not adjustable).
+  // Other seats cut on a $10 step, but only inside the 枠 where no $100 chip is broken:
+  //   cut % 100 <= (bet % 100)  → only the sub-$100 端数 (bet mod 100) is returned in $10 chips.
+  // Among all combinations whose effective total stays <= L (cut total >= required), pick the
+  // smallest cut total (= closest to the limit) and, for that total, the one closest to the
+  // proportional ideal (Σ|cut - ideal| minimal). This keeps small bets from being over-cut.
+  const maxCut = {}; bets.forEach(b => maxCut[b.seat] = b.amount - floor[b.seat]); // floor keeps eff >= guarantee
+  const idealCut = {};
+  bets.forEach(b => idealCut[b.seat] = fixedSeats.has(b.seat) ? maxCut[b.seat] : (b.amount - rawEff[b.seat]));
+  const required = T - L; // cut total must be >= this so effective <= L
+
+  const cut = {};
+  let fixedSum = 0;
+  bets.forEach(b => { if (fixedSeats.has(b.seat)) { cut[b.seat] = maxCut[b.seat]; fixedSum += maxCut[b.seat]; } });
+
+  const nonFixed = bets.filter(b => !fixedSeats.has(b.seat));
+  const cand = {}; // $10 candidate cuts per seat, respecting cut % 100 <= 端数
+  nonFixed.forEach(b => {
+    const d = b.amount % UNIT100; // 端数 (0,10,..,90)
+    const arr = [];
+    for (let v = 0; v <= maxCut[b.seat]; v += INPUT_UNIT) if (v % UNIT100 <= d) arr.push(v);
+    cand[b.seat] = arr.length ? arr : [0];
+  });
+
+  // DP over non-fixed seats. State = their cut total in $10 units; value = min Σ|cut-ideal|.
+  const target = Math.max(0, required - fixedSum); // non-fixed must cut at least this much
+  const maxNon = nonFixed.reduce((s, b) => s + maxCut[b.seat], 0);
+  const NS = Math.floor(maxNon / INPUT_UNIT);
+  let costRow = new Array(NS + 1).fill(Infinity);
+  costRow[0] = 0;
+  const layers = [];
+  for (const b of nonFixed) {
+    const next = new Array(NS + 1).fill(Infinity);
+    const pick = new Array(NS + 1).fill(-1);
+    for (let st = 0; st <= NS; st++) {
+      if (costRow[st] === Infinity) continue;
+      for (const v of cand[b.seat]) {
+        const ns = st + v / INPUT_UNIT;
+        if (ns > NS) continue;
+        const c = costRow[st] + Math.abs(v - idealCut[b.seat]);
+        if (c < next[ns]) { next[ns] = c; pick[ns] = v; }
+      }
+    }
+    costRow = next;
+    layers.push(pick);
+  }
+  // smallest reachable non-fixed total >= target (limit never exceeded, residual minimal);
+  // if target itself is unreachable, fall back to the largest reachable total.
+  const targetIdx = Math.ceil(target / INPUT_UNIT);
+  let bestIdx = -1;
+  for (let st = targetIdx; st <= NS; st++) if (costRow[st] !== Infinity) { bestIdx = st; break; }
+  if (bestIdx === -1) for (let st = NS; st >= 0; st--) if (costRow[st] !== Infinity) { bestIdx = st; break; }
+  let acc = bestIdx;
+  for (let i = nonFixed.length - 1; i >= 0; i--) {
+    const v = acc >= 0 ? layers[i][acc] : 0;
+    const cv = v > 0 ? v : 0;
+    cut[nonFixed[i].seat] = cv;
+    acc -= cv / INPUT_UNIT;
+  }
+
+  // a non-fixed seat cut down to its guarantee floor is also guarantee-bound → mark 保障.
+  const rows = bets.map(b => ({
+    seat: b.seat, amount: b.amount,
+    effective: b.amount - cut[b.seat], cut: cut[b.seat],
+    fixed: fixedSeats.has(b.seat) ||
+           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0)
+  }));
+  const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
+  const diff = effectiveTotal - L; // + : over limit (should not happen), - : under limit
+
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
+}
+
+// ---- render result (single pool) ----
+function renderSide(res, L, GUARANTEE) {
+  if (res.state === 'none') {
+    return `<div class="empty">ベットがありません。</div>`;
+  }
+
+  if (res.state === 'overflow') {
+    return `<div class="remainder-box" style="background:#2a0f0f;border-color:var(--banker);color:#fca5a5;">`
+         + `<div>⚠ 計算できません。最低保証の合計 <b>${fmt(res.floorSum)}</b> が上限 <b>${fmt(L)}</b> を超えています。</div>`
+         + `<div>このベット構成では全員に最低保証 ${fmt(GUARANTEE)} を渡すと上限を超えるため按分できません。上限を上げるか最低保証を下げてください。</div>`
+         + `</div>`;
+  }
+
+  let html = '';
+
+  // prominent key figures: bet total + effective total
+  const effTotalVal = res.state === 'nocut' ? res.T : res.effectiveTotal;
+  let effNote, effNoteClass;
+  if (res.state === 'nocut') {
+    effNote = `上限 ${fmt(L)} 以内・カットなし`; effNoteClass = 'ok-note';
+  } else if (res.diff > 0) {
+    effNote = `上限 ${fmt(L)} を +${fmt(res.diff)} 超過`; effNoteClass = 'cut-note';
+  } else if (res.diff < 0) {
+    effNote = `上限 ${fmt(L)} まで −${fmt(-res.diff)}`; effNoteClass = 'cut-note';
+  } else {
+    effNote = `上限 ${fmt(L)} ちょうど`; effNoteClass = 'ok-note';
+  }
+  const cutTotalVal = res.state === 'nocut' ? 0 : res.cutTotal;
+  html += `<div class="stats">`
+        + `<div class="stat"><span class="stat-label">ベット合計</span><span class="stat-val">${fmt(res.T)}</span></div>`
+        + `<div class="stat stat-cut"><span class="stat-label">カット数合計</span><span class="stat-val">${cutTotalVal > 0 ? fmt(cutTotalVal) : '—'}</span></div>`
+        + `<div class="stat stat-eff"><span class="stat-label">有効ベット合計</span><span class="stat-val">${fmt(effTotalVal)}</span><span class="stat-note ${effNoteClass}">${effNote}</span></div>`
+        + `</div>`;
+
+  if (res.state === 'cut') {
+    html += `<div class="rates">`;
+    const overallRatio = res.cutTotal / res.T;
+    html += `<div class="rate"><div class="rate-main"><span>カット率（全体）</span><b class="cut">${(overallRatio * 100).toFixed(2)}%</b></div>`
+          + `<div class="rate-desc">カット数合計 ÷ ベット合計</div></div>`;
+    // cut-target rate: exclude guarantee-fixed seats from both numerator and denominator
+    const targetBet = res.rows.reduce((s, r) => r.fixed ? s : s + r.amount, 0);
+    const targetCut = res.rows.reduce((s, r) => r.fixed ? s : s + r.cut, 0);
+    if (targetBet > 0) {
+      const targetRatio = targetCut / targetBet;
+      html += `<div class="rate"><div class="rate-main"><span>カット率（対象席のみ）</span><b class="cut">${(targetRatio * 100).toFixed(2)}%（${(targetRatio * 10).toFixed(1)}割カット）</b></div>`
+            + `<div class="rate-desc">保障席を除いた実カット率</div></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // detail table with totals row
+  html += `<table class="rtable"><thead><tr>`
+        + `<th>席</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
+        + `</tr></thead><tbody>`;
+  res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
+    const mark = r.fixed ? `<span class="fixed-mark">保障</span>` : '';
+    html += `<tr>`
+          + `<td>${r.seat}</td>`
+          + `<td>${fmt(r.amount)}</td>`
+          + `<td class="eff-col">${fmt(r.effective)}${mark}</td>`
+          + `<td class="refund">${r.cut > 0 ? fmt(r.cut) : '—'}</td>`
+          + `</tr>`;
+  });
+  html += `</tbody>`;
+  const betTotal = res.rows.reduce((s, r) => s + r.amount, 0);
+  const effTotal = res.rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = res.rows.reduce((s, r) => s + r.cut, 0);
+  html += `<tfoot><tr>`
+        + `<td>合計</td>`
+        + `<td>${fmt(betTotal)}</td>`
+        + `<td class="eff-col">${fmt(effTotal)}</td>`
+        + `<td class="cutnum">${cutTotal > 0 ? fmt(cutTotal) : '—'}</td>`
+        + `</tr></tfoot>`;
+  html += `</table>`;
+  return html;
+}
+
+// ---- validate a limit / guarantee pair ----
+function validateLG(L, GUARANTEE) {
+  const errors = [];
+  if (!Number.isFinite(L) || L <= 0) errors.push('上限ベットは正の数で入力してください');
+  else if (L % INPUT_UNIT !== 0) errors.push(`上限ベット $${L} は$10刻みではありません`);
+  if (!Number.isFinite(GUARANTEE) || GUARANTEE < 0) errors.push('最低保証は0以上の数で入力してください');
+  else if (GUARANTEE % INPUT_UNIT !== 0) errors.push(`最低保証 $${GUARANTEE} は$10刻みではありません`);
+  return errors;
+}
+
+// ---- read & validate settings (from active preset, mirrored to hidden inputs) ----
+function readSettings() {
+  const L = Number(document.getElementById('limitInput').value.trim());
+  const GUARANTEE = Number(document.getElementById('guaranteeInput').value.trim());
+  return { L, GUARANTEE, errors: validateLG(L, GUARANTEE) };
+}
+
+// ---- inline cut cells next to each input ----
+function updateInlineCuts(res) {
+  const cells = {};
+  document.querySelectorAll('.cut-cell').forEach(c => cells[c.dataset.seat] = c);
+  Object.values(cells).forEach(c => { c.textContent = '—'; c.className = 'cut-cell'; });
+  if (!res || res.state !== 'cut') return;
+  res.rows.forEach(r => {
+    const c = cells[r.seat];
+    if (!c) return;
+    if (r.cut > 0) {
+      c.className = 'cut-cell has-cut';
+      c.textContent = fmt(r.cut);
+    }
+  });
+}
+
+function clearInlineCuts() {
+  document.querySelectorAll('.cut-cell').forEach(c => { c.textContent = '—'; c.className = 'cut-cell'; });
+}
+
+// ---- run ----
+function calculate() {
+  const s = readSettings();
+  const b = readBets();
+  const allErrors = [...s.errors, ...b.errors];
+  document.getElementById('errors').textContent =
+    allErrors.length ? '⚠ ' + allErrors.join(' / ') : '';
+
+  if (s.errors.length) {
+    document.getElementById('res').innerHTML = '<div class="empty">設定値を直してください。</div>';
+    clearInlineCuts();
+    return;
+  }
+
+  const res = computeSide(b.bets, s.L, s.GUARANTEE);
+  document.getElementById('res').innerHTML = renderSide(res, s.L, s.GUARANTEE);
+  updateInlineCuts(res);
+}
+
+function clearAll() {
+  document.querySelectorAll('input[data-bet]').forEach(i => { i.value = ''; i.classList.remove('bad'); });
+  document.getElementById('errors').textContent = '';
+  document.getElementById('res').innerHTML = '<div class="empty">ベット額を入力すると結果が表示されます。</div>';
+  clearInlineCuts();
+}
+
+document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+// ===== view switching: calc / help / settings =====
+const views = {
+  calc: document.getElementById('calcView'),
+  help: document.getElementById('helpView'),
+  settings: document.getElementById('settingsView'),
+};
+const helpBtn = document.getElementById('helpBtn');
+let currentView = 'calc';
+function setView(target) {
+  currentView = target;
+  for (const k in views) views[k].toggleAttribute('hidden', k !== target);
+  helpBtn.textContent = target === 'calc' ? '使い方' : '← 計算に戻る';
+}
+helpBtn.addEventListener('click', () => setView(currentView === 'calc' ? 'help' : 'calc'));
+
+// ===== camouflage cover: blank white page; tap top-right to toggle =====
+const coverView = document.getElementById('coverView');
+const hideZone  = document.getElementById('hideZone');
+let covered = true;
+function setCovered(v){ covered = v; coverView.toggleAttribute('hidden', !v); }
+hideZone.addEventListener('click', () => setCovered(!covered));
+
+// ===== presets (上限/保証) =====
+const DEFAULT_PRESETS = [
+  { label: 'A', limit: 3000, guar: 300, scale: 1 },
+  { label: 'B', limit: 5000, guar: 500, scale: 1 },
+  { label: 'C', limit: 5000, guar: 500, scale: 1 },
+  { label: 'D', limit: 8000, guar: 1000, scale: 1 },
+];
+const PRESETS_KEY = 'cut_presets';
+const ACTIVE_KEY = 'cut_active';
+let presets = DEFAULT_PRESETS.map(p => ({ ...p }));
+let activeIdx = 0;
+let selectedIdx = 0;
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved) && saved.length === 4) {
+        presets = DEFAULT_PRESETS.map((d, i) => ({
+          label: d.label,
+          limit: Number(saved[i] && saved[i].limit),
+          guar: Number(saved[i] && saved[i].guar),
+          scale: saved[i] && saved[i].scale,
+        })).map((p, i) => ({
+          label: p.label,
+          limit: Number.isFinite(p.limit) ? p.limit : DEFAULT_PRESETS[i].limit,
+          guar: Number.isFinite(p.guar) ? p.guar : DEFAULT_PRESETS[i].guar,
+          scale: (p.scale === 1 || p.scale === 100) ? p.scale : DEFAULT_PRESETS[i].scale,
+        }));
+      }
+    }
+    const a = Number(localStorage.getItem(ACTIVE_KEY));
+    if (Number.isInteger(a) && a >= 0 && a < 4) activeIdx = a;
+  } catch (e) { /* localStorage unavailable -> defaults */ }
+}
+function savePresets() { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); } catch (e) {} }
+function saveActive() { try { localStorage.setItem(ACTIVE_KEY, String(activeIdx)); } catch (e) {} }
+
+// push the active preset into the hidden L/保証 inputs and recompute
+function applyActive() {
+  document.getElementById('limitInput').value = String(presets[activeIdx].limit);
+  document.getElementById('guaranteeInput').value = String(presets[activeIdx].guar);
+  document.getElementById('presetChipLabel').textContent = presets[activeIdx].label;
+  currentBetScale = presets[activeIdx].scale;
+  document.querySelectorAll('input[data-bet]').forEach(inp => {
+    inp.step = currentBetScale === 100 ? '0.1' : '10';
+    inp.setAttribute('inputmode', currentBetScale === 100 ? 'decimal' : 'numeric');
+  });
+  const unitLabel = document.querySelector('#inputTable thead .unit');
+  if (unitLabel) unitLabel.textContent = currentBetScale === 100 ? ' (1=$100)' : ' (100=$100)';
+  calculate();
+}
+
+// build the 4 preset rows in the settings page
+const presetList = document.getElementById('presetList');
+function renderSettings() {
+  presetList.innerHTML = presets.map((p, i) =>
+    `<div class="preset-row${i === selectedIdx ? ' selected' : ''}" data-idx="${i}">`
+    + `<button type="button" class="preset-pick" data-idx="${i}">${p.label}</button>`
+    + `<div class="preset-fields">`
+    + `<div class="preset-field"><label>上限 ($)</label>`
+    + `<input class="p-limit" data-idx="${i}" type="number" inputmode="numeric" min="10" step="10" value="${p.limit}"></div>`
+    + `<div class="preset-field"><label>最低保証 ($)</label>`
+    + `<input class="p-guar" data-idx="${i}" type="number" inputmode="numeric" min="0" step="10" value="${p.guar}"></div>`
+    + `<div class="preset-field"><label>入力単位</label>`
+    + `<div class="unit-opts">`
+    + `<label><input class="p-unit" type="radio" name="unit-${i}" data-idx="${i}" value="100"${p.scale === 100 ? ' checked' : ''}>1 = $100</label>`
+    + `<label><input class="p-unit" type="radio" name="unit-${i}" data-idx="${i}" value="1"${p.scale === 1 ? ' checked' : ''}>100 = $100</label>`
+    + `</div></div>`
+    + `</div></div>`
+  ).join('');
+}
+function highlightSelected() {
+  presetList.querySelectorAll('.preset-row').forEach(row =>
+    row.classList.toggle('selected', Number(row.dataset.idx) === selectedIdx));
+}
+function openSettings() {
+  selectedIdx = activeIdx;
+  renderSettings();
+  document.getElementById('settingsError').textContent = '';
+  setView('settings');
+}
+
+document.getElementById('presetChip').addEventListener('click', openSettings);
+
+presetList.addEventListener('click', e => {
+  const pick = e.target.closest('.preset-pick');
+  if (!pick) return;
+  selectedIdx = Number(pick.dataset.idx);
+  highlightSelected();
+});
+
+presetList.addEventListener('input', e => {
+  const el = e.target;
+  const idx = Number(el.dataset.idx);
+  if (el.classList.contains('p-limit')) { presets[idx].limit = Number(el.value); savePresets(); }
+  else if (el.classList.contains('p-guar')) { presets[idx].guar = Number(el.value); savePresets(); }
+  else if (el.classList.contains('p-unit')) { presets[idx].scale = Number(el.value); savePresets(); }
+});
+
+document.getElementById('settingsApply').addEventListener('click', () => {
+  const p = presets[selectedIdx];
+  const errs = validateLG(p.limit, p.guar);
+  const errBox = document.getElementById('settingsError');
+  if (errs.length) { errBox.textContent = '⚠ ' + errs.join(' / '); return; }
+  errBox.textContent = '';
+  const prevScale = currentBetScale;
+  activeIdx = selectedIdx;
+  saveActive();
+  if (presets[activeIdx].scale !== prevScale) {
+    document.querySelectorAll('input[data-bet]').forEach(i => { i.value = ''; i.classList.remove('bad'); });
+  }
+  applyActive();
+  setView('calc');
+});
+
+// real-time recompute while typing in the calculator only
+document.querySelectorAll('#calcView input').forEach(i => i.addEventListener('input', calculate));
+// Enter: calculate in calc view
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (currentView === 'calc') calculate();
+});
+
+// ===== init: restore presets & active selection, then apply =====
+loadPrefs();
+applyActive();
+setCovered(true);   // always start on the blank white cover
+
+</script>
+</body>
+</html>
