@@ -222,7 +222,7 @@
       <ul>
         <li>各席の<b>カット数</b>を<b>$100 単位・四捨五入</b>（ちょうど $50 は切り上げ）で決めます。最低保証で固定された席だけは「ベット − 保障」のカットになります。</li>
         <li>有効ベット合計が<b>上限を超えることはありません</b>。四捨五入でわずかに足りない場合は、<b>一番大きく賭けた席</b>からカットを $100 ずつ足して上限以下に収めます。</li>
-        <li>それでも上限ちょうどにならず<b>上限まで少し残る場合</b>があります。その差額は自動調整せず、<b>どの席を上げるかは人間が最終判断</b>します（差額を画面に表示します）。</li>
+        <li>それでも上限ちょうどに届かない端数は、<b>$10端数で賭けている席</b>のうち<b>一番大きく賭けた席のカットを $10 単位で戻し、上限ちょうどに自動調整</b>します（1席で足りなければ次に大きい端数席へ繰り越し）。端数席が無い等で埋めきれない分のみ、<b>「上限まで −$X」</b>と表示します。</li>
       </ul>
 
       <h3>カット数の見方</h3>
@@ -413,6 +413,23 @@ function computeSide(bets, L, GUARANTEE) {
     const cv = v > 0 ? v : 0;
     cut[nonFixed[i].seat] = cv;
     acc -= cv / INPUT_UNIT;
+  }
+
+  // ---- residual fill: 端数で残った分を上限まで埋める ----
+  let residual = L - bets.reduce((s, b) => s + (b.amount - cut[b.seat]), 0);
+  if (residual >= INPUT_UNIT) {
+    const fillSeats = bets
+      .filter(b => b.amount % UNIT100 !== 0)   // $10端数ありの席のみ
+      .sort((a, b) => b.amount - a.amount);    // ベットが大きい順
+    for (const b of fillSeats) {
+      if (residual < INPUT_UNIT) break;
+      let give = Math.min(cut[b.seat], residual);
+      give -= give % INPUT_UNIT;               // $10単位
+      if (give <= 0) continue;
+      cut[b.seat] -= give;                      // カットを戻す＝有効ベットを増やす
+      residual -= give;
+      fixedSeats.delete(b.seat);                // 保障床から外れる（保障マークも外れる）
+    }
   }
 
   // a non-fixed seat cut down to its guarantee floor is also guarantee-bound → mark 保障.
