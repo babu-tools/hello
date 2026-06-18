@@ -1,0 +1,310 @@
+{
+  "カットなし(合計<上限)": {
+    "state": "nocut",
+    "T": 2300,
+    "ratio": 1,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 500,
+        "effective": 500,
+        "cut": 0,
+        "fixed": false
+      },
+      {
+        "seat": 2,
+        "amount": 800,
+        "effective": 800,
+        "cut": 0,
+        "fixed": false
+      },
+      {
+        "seat": 3,
+        "amount": 1000,
+        "effective": 1000,
+        "cut": 0,
+        "fixed": false
+      }
+    ],
+    "effectiveTotal": 2300,
+    "cutTotal": 0,
+    "diff": -700
+  },
+  "上限ちょうど": {
+    "state": "nocut",
+    "T": 3000,
+    "ratio": 1,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 1000,
+        "effective": 1000,
+        "cut": 0,
+        "fixed": false
+      },
+      {
+        "seat": 2,
+        "amount": 1000,
+        "effective": 1000,
+        "cut": 0,
+        "fixed": false
+      },
+      {
+        "seat": 3,
+        "amount": 1000,
+        "effective": 1000,
+        "cut": 0,
+        "fixed": false
+      }
+    ],
+    "effectiveTotal": 3000,
+    "cutTotal": 0,
+    "diff": 0
+  },
+  "1席だけ超過": {
+    "state": "cut",
+    "T": 5000,
+    "ratio": 0.6,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 5000,
+        "effective": 3000,
+        "cut": 2000,
+        "fixed": false
+      }
+    ],
+    "effectiveTotal": 3000,
+    "cutTotal": 2000,
+    "diff": 0
+  },
+  "全席同額で超過": {
+    "state": "cut",
+    "T": 4000,
+    "ratio": 0.75,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 1000,
+        "effective": 800,
+        "cut": 200,
+        "fixed": false
+      },
+      {
+        "seat": 2,
+        "amount": 1000,
+        "effective": 800,
+        "cut": 200,
+        "fixed": false
+      },
+      {
+        "seat": 3,
+        "amount": 1000,
+        "effective": 700,
+        "cut": 300,
+        "fixed": false
+      },
+      {
+        "seat": 4,
+        "amount": 1000,
+        "effective": 700,
+        "cut": 300,
+        "fixed": false
+      }
+    ],
+    "effectiveTotal": 3000,
+    "cutTotal": 1000,
+    "diff": 0
+  },
+  "$10端数あり": {
+    "state": "cut",
+    "T": 3800,
+    "ratio": 0.7894736842105263,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 460,
+        "effective": 360,
+        "cut": 100,
+        "fixed": false
+      },
+      {
+        "seat": 2,
+        "amount": 1230,
+        "effective": 930,
+        "cut": 300,
+        "fixed": false
+      },
+      {
+        "seat": 3,
+        "amount": 2110,
+        "effective": 1710,
+        "cut": 400,
+        "fixed": false
+      }
+    ],
+    "effectiveTotal": 3000,
+    "cutTotal": 800,
+    "diff": 0
+  },
+  "最低保証で固定が発生": {
+    "state": "cut",
+    "T": 4750,
+    "ratio": 0.6111111111111112,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 100,
+        "effective": 100,
+        "cut": 0,
+        "fixed": true
+      },
+      {
+        "seat": 2,
+        "amount": 150,
+        "effective": 150,
+        "cut": 0,
+        "fixed": true
+      },
+      {
+        "seat": 3,
+        "amount": 2000,
+        "effective": 1200,
+        "cut": 800,
+        "fixed": false
+      },
+      {
+        "seat": 4,
+        "amount": 2500,
+        "effective": 1500,
+        "cut": 1000,
+        "fixed": false
+      }
+    ],
+    "effectiveTotal": 2950,
+    "cutTotal": 1800,
+    "diff": -50
+  },
+  "保証合計が上限超過": {
+    "state": "cut",
+    "T": 3600,
+    "ratio": 0.8333333333333334,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 600,
+        "effective": 500,
+        "cut": 100,
+        "fixed": true
+      },
+      {
+        "seat": 2,
+        "amount": 600,
+        "effective": 500,
+        "cut": 100,
+        "fixed": true
+      },
+      {
+        "seat": 3,
+        "amount": 600,
+        "effective": 500,
+        "cut": 100,
+        "fixed": true
+      },
+      {
+        "seat": 4,
+        "amount": 600,
+        "effective": 500,
+        "cut": 100,
+        "fixed": true
+      },
+      {
+        "seat": 5,
+        "amount": 600,
+        "effective": 500,
+        "cut": 100,
+        "fixed": true
+      },
+      {
+        "seat": 6,
+        "amount": 600,
+        "effective": 500,
+        "cut": 100,
+        "fixed": true
+      }
+    ],
+    "effectiveTotal": 3000,
+    "cutTotal": 600,
+    "diff": 0
+  },
+  "ベットなし": {
+    "state": "none",
+    "T": 0
+  },
+  "8席フル・端数まじり": {
+    "state": "cut",
+    "T": 7320,
+    "ratio": 0.6328671328671329,
+    "rows": [
+      {
+        "seat": 1,
+        "amount": 460,
+        "effective": 460,
+        "cut": 0,
+        "fixed": true
+      },
+      {
+        "seat": 2,
+        "amount": 1230,
+        "effective": 800,
+        "cut": 430,
+        "fixed": false
+      },
+      {
+        "seat": 3,
+        "amount": 2110,
+        "effective": 1310,
+        "cut": 800,
+        "fixed": false
+      },
+      {
+        "seat": 4,
+        "amount": 880,
+        "effective": 510,
+        "cut": 370,
+        "fixed": false
+      },
+      {
+        "seat": 5,
+        "amount": 90,
+        "effective": 90,
+        "cut": 0,
+        "fixed": true
+      },
+      {
+        "seat": 6,
+        "amount": 1500,
+        "effective": 1000,
+        "cut": 500,
+        "fixed": false
+      },
+      {
+        "seat": 7,
+        "amount": 330,
+        "effective": 330,
+        "cut": 0,
+        "fixed": true
+      },
+      {
+        "seat": 8,
+        "amount": 720,
+        "effective": 500,
+        "cut": 220,
+        "fixed": true
+      }
+    ],
+    "effectiveTotal": 5000,
+    "cutTotal": 2320,
+    "diff": 0
+  }
+}
