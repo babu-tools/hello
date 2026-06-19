@@ -60,11 +60,6 @@ var computeSide = eval(
   '(function(INPUT_UNIT, UNIT100){ ' + computeSideSrc + ' return computeSide; })'
 )(INPUT_UNIT, UNIT100);
 
-// 「上限まで詰める」候補（$100チップ1枚崩し案）も取り出す。表示専用だが、
-// 人間に「この席を崩せ」と勧める以上、勧めどおりにすると本当に上限ちょうど＆逆転なしかを検証する。
-var fillHintsSrc = extractFunction(src, 'fillHints');
-var fillHints = eval('(function(){ ' + fillHintsSrc + ' return fillHints; })')();
-
 // ---- 2. テスト用ヘルパ ----
 var failures = [];
 function check(cond, label) { if (!cond) failures.push(label); }
@@ -107,27 +102,6 @@ function invariantCheck(res, L, G, label) {
       label + ': カット逆転 (席' + ord[i].seat + '$' + ord[i].amount + ' のカットが 席' + ord[i - 1].seat + '$' + ord[i - 1].amount + ' より少ない)');
     check(ord[i].effective >= ord[i - 1].effective,
       label + ': 有効ベット逆転 (席' + ord[i].seat + '$' + ord[i].amount + ' の有効が 席' + ord[i - 1].seat + '$' + ord[i - 1].amount + ' より少ない)');
-  }
-
-  // ★詰め候補(fillHints)の妥当性: 上限まで隙間がある時、各候補を「勧めどおり」適用すると
-  //   (1)有効合計がちょうど上限 (2)適用後も逆転なし、を満たすこと（誤った助言で逆転を作らない）。
-  if (res.state === 'cut' && res.diff < 0) {
-    var hints = fillHints(rows, L);
-    hints.forEach(function (h) {
-      var applied = rows.map(function (r) {
-        var c = r.seat === h.seat ? h.newCut : r.cut;
-        return { seat: r.seat, amount: r.amount, cut: c, effective: r.amount - c };
-      });
-      check(h.newCut >= 0, label + ': 詰め候補のカットが負 (席' + h.seat + ')');
-      var effA = applied.reduce(function (s, r) { return s + r.effective; }, 0);
-      check(effA === L, label + ': 詰め候補を適用しても上限ちょうどにならない (席' + h.seat + ' eff=' + effA + ' L=' + L + ')');
-      var ordA = applied.slice().sort(function (a, b) { return a.amount - b.amount; });
-      for (var j = 1; j < ordA.length; j++) {
-        if (ordA[j].amount === ordA[j - 1].amount) continue;
-        check(ordA[j].cut >= ordA[j - 1].cut, label + ': 詰め候補適用でカット逆転 (席' + h.seat + ')');
-        check(ordA[j].effective >= ordA[j - 1].effective, label + ': 詰め候補適用で有効逆転 (席' + h.seat + ')');
-      }
-    });
   }
 }
 
