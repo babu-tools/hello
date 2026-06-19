@@ -130,6 +130,16 @@
   .rtable td.eff-col { color: var(--ok); }
   .rtable tfoot td.eff-col { color: var(--ok); }
   .rtable tr.cand td { background: #2a2305; }
+  .fill-hint {
+    background: #2a2305; border: 1px solid var(--remainder); border-radius: 8px;
+    padding: 10px 12px; margin: 12px 0 0; font-size: 13px;
+  }
+  .fill-hint-head { color: var(--remainder); font-weight: 700; line-height: 1.5; margin-bottom: 8px; }
+  .fill-hint-head b { color: #fff; }
+  .fill-hint-table { margin: 0; }
+  .fill-hint-table th, .fill-hint-table td { padding: 6px 4px; }
+  .fill-hint-table b { color: #fff; }
+  .fill-hint-note { color: var(--sub); font-size: 12px; margin-top: 6px; }
   .fixed-mark { color: var(--remainder); font-size: 11px; margin-left: 4px; }
   .refund { color: var(--cutnum); }
   .errors { color: var(--warn); font-size: 13px; margin-top: 8px; min-height: 18px; }
@@ -435,6 +445,34 @@ function computeSide(bets, L, GUARANTEE) {
   return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
 }
 
+// ---- 上限まで隙間がある時の「詰め方」候補（$100チップを1枚崩す案）----
+// 余りは自動では振り分けない（それが旧バグ）。代わりに「どの席を1つ崩せば
+// 上限ちょうどになるか」を、逆転しない席だけ候補として返す（最終判断は人間）。
+function fillHints(rows, L) {
+  const effTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const gap = L - effTotal;                       // >0 なら上限まで余りがある
+  if (gap <= 0) return [];
+  const asc = rows.slice().sort((a, b) => a.amount - b.amount);
+  const monotonicOK = (cutOf) => {
+    for (let i = 1; i < asc.length; i++) {
+      const hi = asc[i], lo = asc[i - 1];
+      if (hi.amount === lo.amount) continue;        // 同額は対象外
+      if (cutOf(hi) < cutOf(lo)) return false;      // カット逆転
+      if ((hi.amount - cutOf(hi)) < (lo.amount - cutOf(lo))) return false; // 有効逆転
+    }
+    return true;
+  };
+  const hints = [];
+  rows.forEach(r => {
+    if (r.cut < gap) return;                        // この席だけでは詰めきれない
+    const newCut = r.cut - gap;                     // gap だけカットを減らす＝上限ちょうど
+    if (!monotonicOK(x => x.seat === r.seat ? newCut : x.cut)) return; // 崩すと逆転する席は出さない
+    hints.push({ seat: r.seat, amount: r.amount, oldCut: r.cut, newCut: newCut,
+                 oldEff: r.effective, newEff: r.amount - newCut });
+  });
+  return hints;
+}
+
 // ---- render result (single pool) ----
 function renderSide(res, L, GUARANTEE) {
   if (res.state === 'none') {
@@ -509,6 +547,30 @@ function renderSide(res, L, GUARANTEE) {
         + `<td class="cutnum">${cutTotal > 0 ? fmt(cutTotal) : '—'}</td>`
         + `</tr></tfoot>`;
   html += `</table>`;
+
+  // 上限まで隙間がある時だけ、「$100チップを1枚崩して詰める」候補を表示（表示のみ・自動適用しない）
+  if (res.state === 'cut' && res.diff < 0) {
+    const hints = fillHints(res.rows, L);
+    if (hints.length > 0) {
+      const gap = -res.diff;
+      html += `<div class="fill-hint">`
+            + `<div class="fill-hint-head">💡 上限まで −${fmt(gap)}。$100チップを1枚崩せば上限ちょうど（${fmt(L)}）にできます。<b>どれか1席だけ</b>選んでください（やる/やらないはディーラー判断）。</div>`
+            + `<table class="rtable fill-hint-table"><thead><tr>`
+            + `<th>席</th><th>ベット</th><th>カット</th><th>有効ベット</th>`
+            + `</tr></thead><tbody>`;
+      hints.slice().sort((a, b) => a.seat - b.seat).forEach(h => {
+        html += `<tr>`
+              + `<td>${h.seat}</td>`
+              + `<td>${fmt(h.amount)}</td>`
+              + `<td class="refund">${fmt(h.oldCut)} → <b>${fmt(h.newCut)}</b></td>`
+              + `<td class="eff-col">${fmt(h.oldEff)} → <b>${fmt(h.newEff)}</b></td>`
+              + `</tr>`;
+      });
+      html += `</tbody></table>`
+            + `<div class="fill-hint-note">※ 1席やれば合計ちょうど${fmt(L)}。複数やる必要はありません。</div>`
+            + `</div>`;
+    }
+  }
   return html;
 }
 
