@@ -88,6 +88,21 @@ function invariantCheck(res, L, G, label) {
   check(effTotal <= L, label + ': ★有効ベット合計が上限を超過 (' + effTotal + ' > ' + L + ')');
   check(effTotal + cutTotal === betTotal, label + ': ベット保存則が崩れ');
   check((L - effTotal) % INPUT_UNIT === 0, label + ': 上限との差が$10単位でない');
+
+  // ★$100チップを割らない: カットの「$100未満の端数」がベットの「$100未満の端数」を超えない
+  rows.forEach(function (r) {
+    check(r.cut % UNIT100 <= r.amount % UNIT100,
+      label + ': $100チップ割れ (席' + r.seat + ' cut=' + r.cut + ' bet=' + r.amount + ')');
+  });
+  // ★逆転禁止: ベット昇順で、カットも有効ベットも非減少（大ベットが小ベットより不利にならない）
+  var ord = rows.slice().sort(function (a, b) { return a.amount - b.amount; });
+  for (var i = 1; i < ord.length; i++) {
+    if (ord[i].amount === ord[i - 1].amount) continue; // 同額は対象外
+    check(ord[i].cut >= ord[i - 1].cut,
+      label + ': カット逆転 (席' + ord[i].seat + '$' + ord[i].amount + ' のカットが 席' + ord[i - 1].seat + '$' + ord[i - 1].amount + ' より少ない)');
+    check(ord[i].effective >= ord[i - 1].effective,
+      label + ': 有効ベット逆転 (席' + ord[i].seat + '$' + ord[i].amount + ' の有効が 席' + ord[i - 1].seat + '$' + ord[i - 1].amount + ' より少ない)');
+  }
 }
 
 var TRIALS = 5000;

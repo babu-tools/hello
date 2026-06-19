@@ -354,90 +354,79 @@ function computeSide(bets, L, GUARANTEE) {
     active = active.filter(b => !newlyFixed.includes(b));
   }
 
-  // ---- per-seat cut: $10-unit fine adjustment within each seat's "no-$100-break" 枠 ----
-  // Guarantee-fixed seats cut to their floor (bet - 保障; not adjustable).
-  // Other seats cut on a $10 step, but only inside the 枠 where no $100 chip is broken:
-  //   cut % 100 <= (bet % 100)  → only the sub-$100 端数 (bet mod 100) is returned in $10 chips.
-  // Among all combinations whose effective total stays <= L (cut total >= required), pick the
-  // smallest cut total (= closest to the limit) and, for that total, the one closest to the
-  // proportional ideal (Σ|cut - ideal| minimal). This keeps small bets from being over-cut.
-  const maxCut = {}; bets.forEach(b => maxCut[b.seat] = b.amount - floor[b.seat]); // floor keeps eff >= guarantee
-  const idealCut = {};
-  bets.forEach(b => idealCut[b.seat] = fixedSeats.has(b.seat) ? maxCut[b.seat] : (b.amount - rawEff[b.seat]));
-  const required = T - L; // cut total must be >= this so effective <= L
+  // ---- per-seat cut selection（逆転禁止・$100チップ非割れ・上限非超過のDP）----
+  // 方針:
+  //   ・ベットを小さい順に並べ、各席のカットを「直前の席のカット以上、差はベット差まで」の
+  //     “逆転しない帯” に収める（カットも有効ベットも非減少になる＝大ベットが不利にならない）。
+  //   ・各席で $100チップを割らない（cut % 100 <= bet % 100）。
+  //   ・比例配分の理想に近く、有効合計が上限を超えない範囲で、上限に最も近い組合せを選ぶ。
+  //   ・どうしても逆転/チップ割れなく上限まで届かない端数は戻さず、画面に「上限まで −$X」と出す。
+  const maxCut = {}; bets.forEach(b => maxCut[b.seat] = b.amount - floor[b.seat]); // floor が保証床
+  const idealCut = {}; bets.forEach(b => idealCut[b.seat] = b.amount - rawEff[b.seat]); // 比例配分の理想カット（単調）
+  const required = T - L; // これだけ削れば有効合計が上限ちょうど
 
-  const cut = {};
-  let fixedSum = 0;
-  bets.forEach(b => { if (fixedSeats.has(b.seat)) { cut[b.seat] = maxCut[b.seat]; fixedSum += maxCut[b.seat]; } });
+  const C100 = UNIT100 / INPUT_UNIT;                              // $100 を $10 単位で表した数（=10）
+  const asc = bets.slice().sort((a, b) => a.amount - b.amount || a.seat - b.seat);
+  const n = asc.length;
+  const amtU = asc.map(b => b.amount / INPUT_UNIT);
+  const maxU = asc.map(b => maxCut[b.seat] / INPUT_UNIT);
+  const idU  = asc.map(b => idealCut[b.seat] / INPUT_UNIT);        // 連続値（小数可）
+  const remU = asc.map(b => (b.amount % UNIT100) / INPUT_UNIT);    // 許される$100未満の端数（0..9）
+  const gapU = asc.map((b, i) => i === 0 ? 0 : amtU[i] - amtU[i - 1]);
+  const reqU = required / INPUT_UNIT;                              // 上限ちょうどに必要なカット合計（単位）
 
-  const nonFixed = bets.filter(b => !fixedSeats.has(b.seat));
-  const cand = {}; // $10 candidate cuts per seat, respecting cut % 100 <= 端数
-  nonFixed.forEach(b => {
-    const d = b.amount % UNIT100; // 端数 (0,10,..,90)
-    const arr = [];
-    for (let v = 0; v <= maxCut[b.seat]; v += INPUT_UNIT) if (v % UNIT100 <= d) arr.push(v);
-    cand[b.seat] = arr.length ? arr : [0];
-  });
+  const W = 30;          // 理想からの探索幅（単位＝$300）。これを超える偏りは実務上不要。
+  const GAP = 90;        // 上限から離れてよい上限幅（単位＝$900）。これ以内で上限に最も近い解を採る。
+  const capTotal = reqU + GAP;
 
-  // DP over non-fixed seats. State = their cut total in $10 units; value = min Σ|cut-ideal|.
-  const target = Math.max(0, required - fixedSum); // non-fixed must cut at least this much
-  const maxNon = nonFixed.reduce((s, b) => s + maxCut[b.seat], 0);
-  const NS = Math.floor(maxNon / INPUT_UNIT);
-  let costRow = new Array(NS + 1).fill(Infinity);
-  costRow[0] = 0;
-  const layers = [];
-  for (const b of nonFixed) {
-    const next = new Array(NS + 1).fill(Infinity);
-    const pick = new Array(NS + 1).fill(-1);
-    for (let st = 0; st <= NS; st++) {
-      if (costRow[st] === Infinity) continue;
-      for (const v of cand[b.seat]) {
-        const ns = st + v / INPUT_UNIT;
-        if (ns > NS) continue;
-        const c = costRow[st] + Math.abs(v - idealCut[b.seat]);
-        if (c < next[ns]) { next[ns] = c; pick[ns] = v; }
+  const memo = {};
+  function solve(i, prevCut) {
+    if (i === n) { const base = {}; base[0] = { dev: 0, c: -1, sub: -1 }; return base; }
+    const key = i * 100000 + prevCut;
+    if (memo[key]) return memo[key];
+    let lo = (i === 0) ? 0 : prevCut;
+    let hi = (i === 0) ? maxU[i] : Math.min(maxU[i], prevCut + gapU[i]);
+    lo = Math.max(lo, Math.floor(idU[i]) - W);                     // 理想付近に探索を絞る
+    hi = Math.min(hi, Math.ceil(idU[i]) + W);
+    const res = {};
+    for (let c = lo; c <= hi; c++) {
+      if (c < 0) continue;
+      if (c % C100 > remU[i]) continue;                            // $100チップを割る
+      const sub = solve(i + 1, c);
+      const dvc = Math.abs(c - idU[i]);
+      for (const k in sub) {
+        const tot = c + (+k);
+        if (tot > capTotal) continue;
+        const dev = dvc + sub[k].dev;
+        if (!res[tot] || dev < res[tot].dev) res[tot] = { dev: dev, c: c, sub: +k };
       }
     }
-    costRow = next;
-    layers.push(pick);
-  }
-  // smallest reachable non-fixed total >= target (limit never exceeded, residual minimal);
-  // if target itself is unreachable, fall back to the largest reachable total.
-  const targetIdx = Math.ceil(target / INPUT_UNIT);
-  let bestIdx = -1;
-  for (let st = targetIdx; st <= NS; st++) if (costRow[st] !== Infinity) { bestIdx = st; break; }
-  if (bestIdx === -1) for (let st = NS; st >= 0; st--) if (costRow[st] !== Infinity) { bestIdx = st; break; }
-  let acc = bestIdx;
-  for (let i = nonFixed.length - 1; i >= 0; i--) {
-    const v = acc >= 0 ? layers[i][acc] : 0;
-    const cv = v > 0 ? v : 0;
-    cut[nonFixed[i].seat] = cv;
-    acc -= cv / INPUT_UNIT;
+    memo[key] = res;
+    return res;
   }
 
-  // ---- residual fill: 端数で残った分を上限まで埋める ----
-  let residual = L - bets.reduce((s, b) => s + (b.amount - cut[b.seat]), 0);
-  if (residual >= INPUT_UNIT) {
-    const fillSeats = bets
-      .filter(b => b.amount % UNIT100 !== 0)   // $10端数ありの席のみ
-      .sort((a, b) => b.amount - a.amount);    // ベットが大きい順
-    for (const b of fillSeats) {
-      if (residual < INPUT_UNIT) break;
-      let give = Math.min(cut[b.seat], residual);
-      give -= give % INPUT_UNIT;               // $10単位
-      if (give <= 0) continue;
-      cut[b.seat] -= give;                      // カットを戻す＝有効ベットを増やす
-      residual -= give;
-      fixedSeats.delete(b.seat);                // 保障床から外れる（保障マークも外れる）
+  const cut = {};
+  const root = solve(0, 0);
+  let bestTot = -1;
+  for (const k in root) { const tv = +k; if (tv >= reqU && (bestTot < 0 || tv < bestTot)) bestTot = tv; }
+  if (bestTot >= 0) {
+    let i = 0, prev = 0, tot = bestTot;                            // 最適解を復元
+    while (i < n) {
+      const e = solve(i, prev)[tot];
+      cut[asc[i].seat] = e.c * INPUT_UNIT;
+      prev = e.c; tot = e.sub; i++;
     }
+  } else {
+    // フォールバック: 全員を保証床まで削る（必ず単調・チップ非割れ・上限以内）。
+    asc.forEach((b, i) => cut[b.seat] = maxU[i] * INPUT_UNIT);
   }
 
-  // a non-fixed seat cut down to its guarantee floor is also guarantee-bound → mark 保障.
+  // 「保障」マーク: 保証床まで削られて固定された席（カットが上限=有効ベットが保証額ちょうど）。
+  const isGuarFixed = (s) => GUARANTEE > 0 && floor[s] === GUARANTEE && cut[s] === maxCut[s] && cut[s] > 0;
   const rows = bets.map(b => ({
     seat: b.seat, amount: b.amount,
     effective: b.amount - cut[b.seat], cut: cut[b.seat],
-    fixed: fixedSeats.has(b.seat) ||
-           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0)
+    fixed: isGuarFixed(b.seat)
   }));
   const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
   const cutTotal = rows.reduce((s, r) => s + r.cut, 0);

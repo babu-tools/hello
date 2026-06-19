@@ -86,15 +86,15 @@
       {
         "seat": 1,
         "amount": 1000,
-        "effective": 800,
-        "cut": 200,
+        "effective": 700,
+        "cut": 300,
         "fixed": false
       },
       {
         "seat": 2,
         "amount": 1000,
-        "effective": 800,
-        "cut": 200,
+        "effective": 700,
+        "cut": 300,
         "fixed": false
       },
       {
@@ -112,9 +112,9 @@
         "fixed": false
       }
     ],
-    "effectiveTotal": 3000,
-    "cutTotal": 1000,
-    "diff": 0
+    "effectiveTotal": 2800,
+    "cutTotal": 1200,
+    "diff": -200
   },
   "$10端数あり": {
     "state": "cut",
@@ -157,14 +157,14 @@
         "amount": 100,
         "effective": 100,
         "cut": 0,
-        "fixed": true
+        "fixed": false
       },
       {
         "seat": 2,
         "amount": 150,
         "effective": 150,
         "cut": 0,
-        "fixed": true
+        "fixed": false
       },
       {
         "seat": 3,
@@ -251,7 +251,7 @@
         "amount": 460,
         "effective": 460,
         "cut": 0,
-        "fixed": true
+        "fixed": false
       },
       {
         "seat": 2,
@@ -263,15 +263,15 @@
       {
         "seat": 3,
         "amount": 2110,
-        "effective": 1310,
-        "cut": 800,
+        "effective": 1300,
+        "cut": 810,
         "fixed": false
       },
       {
         "seat": 4,
         "amount": 880,
-        "effective": 510,
-        "cut": 370,
+        "effective": 520,
+        "cut": 360,
         "fixed": false
       },
       {
@@ -279,7 +279,7 @@
         "amount": 90,
         "effective": 90,
         "cut": 0,
-        "fixed": true
+        "fixed": false
       },
       {
         "seat": 6,
@@ -293,7 +293,7 @@
         "amount": 330,
         "effective": 330,
         "cut": 0,
-        "fixed": true
+        "fixed": false
       },
       {
         "seat": 8,
