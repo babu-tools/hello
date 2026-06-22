@@ -94,6 +94,12 @@
   .hint { color: var(--sub); font-size: 13px; }
   .results { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .side h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .side-head { display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-bottom: 4px; }
+  .side-head h2 { margin: 0; }
+  .calc-toggle { display: flex; gap: 6px; }
+  .calc-toggle button { padding: 8px 14px; font-size: 13px; font-weight: 700; border-radius: 8px;
+    background: #364150; color: var(--sub); }
+  .calc-toggle button.active { background: var(--accent); color: #fff; }
   .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
   .stat { background:#0d1620; border:1px solid var(--line); border-radius:10px;
@@ -109,8 +115,9 @@
   .rates { margin-bottom: 12px; }
   .rate { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .rate:last-child { border-bottom: none; }
-  .rate-main { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .rate-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .rate-main span { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .rate-left { display: inline-flex; align-items: center; gap: 8px; }
   .rate-main b { font-size: 17px; font-variant-numeric: tabular-nums; }
   .rate-desc { color: var(--sub); font-size: 11px; margin-top: 2px; }
   .nocut { color: var(--ok); }
@@ -121,7 +128,9 @@
   }
   .remainder-box div { padding: 2px 0; }
   .remainder-box b { color: #fff; }
-  .rtable td { font-variant-numeric: tabular-nums; }
+  .rtable td { font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
+  .rtable th { font-size: 13px; }
+  .rtable td:first-child { font-weight: 600; color: var(--sub); }
   .rtable tfoot td { font-weight:800; font-size:16px; color:var(--txt);
     border-top:2px solid var(--accent); border-bottom:none; background:#182230;
     padding-top:12px; padding-bottom:12px; }
@@ -130,7 +139,11 @@
   .rtable td.eff-col { color: var(--ok); }
   .rtable tfoot td.eff-col { color: var(--ok); }
   .rtable tr.cand td { background: #2a2305; }
-  .fixed-mark { color: var(--remainder); font-size: 11px; margin-left: 4px; }
+  .rtable .rate-col { display: none; }                  /* 既定は非表示 */
+  .rtable.show-rate .rate-col { display: table-cell; }  /* 席列タップで表示 */
+  .rtable td.rate-col { color: var(--cutnum); }
+  .rtable .seat-cell { cursor: pointer; -webkit-tap-highlight-color: rgba(255,255,255,.12); }
+  .guar-mark { color: var(--remainder); font-weight: 800; margin-right: 3px; }
   .refund { color: var(--cutnum); }
   .errors { color: var(--warn); font-size: 13px; margin-top: 8px; min-height: 18px; }
   .empty { color: var(--sub); font-style: italic; }
@@ -150,7 +163,8 @@
     .unit { display: block; font-size: 9px; font-weight: 400; opacity: 0.8; }
     input { width: 100%; min-width: 0; padding: 8px 5px; font-size: 16px; }
     .cut-cell { min-width: 0; font-size: 12px; }
-    .rtable td, .rtable th { padding: 7px 4px; font-size: 13px; }
+    .rtable th { padding: 7px 3px; font-size: 11px; }
+    .rtable td { padding: 8px 3px; font-size: 15px; font-weight: 700; }
     .stats { grid-template-columns: 1fr; gap: 8px; }
     .stat { padding: 10px 12px; flex-direction: row; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; }
     .stat-label { font-size: 13px; }
@@ -198,7 +212,13 @@
 
   <div class="results">
     <div class="card side">
-      <h2>カット結果</h2>
+      <div class="side-head">
+        <h2>カット結果</h2>
+        <div class="calc-toggle">
+          <button type="button" data-mode="latest">最新版</button>
+          <button type="button" data-mode="old">旧版</button>
+        </div>
+      </div>
       <div id="res"><div class="empty">ベット額を入力すると結果が表示されます。</div></div>
     </div>
   </div>
@@ -267,6 +287,9 @@ const SEATS = 8;
 const INPUT_UNIT = 10;   // bets are computed in $10 steps (dollars)
 const UNIT100 = 100;     // cut granularity ($100 units)
 let currentBetScale = 1;
+const CALCMODE_KEY = 'cut_calcmode';
+let calcMode = 'latest';  // 'latest' | 'old'
+let showSeatRate = false;  // 詳細テーブルの個人カット率列の表示状態（保持しない）
 
 // ---- build input rows ----
 const tbody = document.querySelector('#inputTable tbody');
@@ -435,6 +458,113 @@ function computeSide(bets, L, GUARANTEE) {
   return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
 }
 
+// ---- core computation: 旧版（四捨五入＋大ベット席からの足し込み＋逆転ガード） ----
+// index.html の computeSide を逐語コピー（関数名のみ computeSideOld に変更）。
+// 戻り値の形は computeSide と同一なので renderSide でそのまま描画できる。
+function computeSideOld(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  // iterative constrained pro-rata with minimum guarantee floor -> rawEff (sums to L)
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  // overflow guard: if guaranteed floors alone exceed the limit, the cut is impossible
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  let active = bets.slice();
+  const fixedSeats = new Set();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+      fixedSeats.add(b.seat);
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // The cut amount itself is the rounded quantity ($100 units). The remaining
+  // effective bet is derived as bet - cut, so it stays on a $10 step.
+  const betOf = {}; bets.forEach(b => betOf[b.seat] = b.amount);
+  const maxCut = {}; bets.forEach(b => maxCut[b.seat] = b.amount - floor[b.seat]); // floor keeps eff >= guarantee
+  const cut = {};
+
+  // 1) per-seat cut: guarantee-fixed seats keep bet - floor (not rounded);
+  //    others round the proportional cut to $100 (四捨五入, .50 up), clamped to [0, maxCut].
+  bets.forEach(b => {
+    if (fixedSeats.has(b.seat)) {
+      cut[b.seat] = maxCut[b.seat];
+    } else {
+      const r = roundUnit(betOf[b.seat] - rawEff[b.seat], UNIT100);
+      cut[b.seat] = Math.max(0, Math.min(r, maxCut[b.seat]));
+    }
+  });
+
+  const cutSum = () => bets.reduce((s, b) => s + cut[b.seat], 0);
+  const required = T - L; // total that must be cut so effective <= L
+
+  // 2) never exceed the limit: if rounding under-cut, take an extra $100 from the
+  //    largest bet that still has headroom (ties -> lowest seat number).
+  let safety = 0;
+  while (cutSum() < required && safety++ <= bets.length * 100) {
+    const cand = bets
+      .filter(b => cut[b.seat] < maxCut[b.seat])
+      .sort((a, b) => b.amount - a.amount || a.seat - b.seat)[0];
+    if (!cand) break; // no headroom (floors already absorb everything)
+    cut[cand.seat] = Math.min(cut[cand.seat] + UNIT100, maxCut[cand.seat]);
+  }
+
+  // 3) defensive monotonicity guard: bigger bet must not get a smaller cut.
+  //    Bump the larger-bet seat by $100 (stays <= limit) until order is restored.
+  let guard = 0;
+  while (guard++ <= bets.length * bets.length) {
+    let fixed = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount > b.amount && cut[a.seat] < cut[b.seat] && cut[a.seat] < maxCut[a.seat]) {
+          cut[a.seat] = Math.min(cut[a.seat] + UNIT100, maxCut[a.seat]);
+          fixed = true;
+        }
+      }
+    }
+    if (!fixed) break;
+  }
+
+  // a seat pushed down to its guarantee floor (by the bump/guard steps) is also
+  // guarantee-bound: mark it 保障 so its non-$100 cut (= bet - 保障) is explained.
+  const rows = bets.map(b => ({
+    seat: b.seat, amount: b.amount,
+    effective: b.amount - cut[b.seat], cut: cut[b.seat],
+    fixed: fixedSeats.has(b.seat) ||
+           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0)
+  }));
+  const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
+  const diff = effectiveTotal - L; // + : over limit (should not happen), - : under limit
+
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
+}
+
 // ---- render result (single pool) ----
 function renderSide(res, L, GUARANTEE) {
   if (res.state === 'none') {
@@ -449,6 +579,9 @@ function renderSide(res, L, GUARANTEE) {
   }
 
   let html = '';
+
+  // guarantee-protected seat: effective bet held at its floor (= min(bet, guarantee))
+  const isGuar = r => GUARANTEE > 0 && r.effective === Math.min(r.amount, GUARANTEE);
 
   // prominent key figures: bet total + effective total
   const effTotalVal = res.state === 'nocut' ? res.T : res.effectiveTotal;
@@ -471,12 +604,13 @@ function renderSide(res, L, GUARANTEE) {
 
   if (res.state === 'cut') {
     html += `<div class="rates">`;
+    // 実績: 実際に切った数字 ÷ ベット
     const overallRatio = res.cutTotal / res.T;
-    html += `<div class="rate"><div class="rate-main"><span>カット率（全体）</span><b class="cut">${(overallRatio * 100).toFixed(2)}%</b></div>`
+    html += `<div class="rate"><div class="rate-main"><span class="rate-left">カット率（全体）</span><b class="cut">${(overallRatio * 100).toFixed(2)}%</b></div>`
           + `<div class="rate-desc">カット数合計 ÷ ベット合計</div></div>`;
     // cut-target rate: exclude guarantee-fixed seats from both numerator and denominator
-    const targetBet = res.rows.reduce((s, r) => r.fixed ? s : s + r.amount, 0);
-    const targetCut = res.rows.reduce((s, r) => r.fixed ? s : s + r.cut, 0);
+    const targetBet = res.rows.reduce((s, r) => isGuar(r) ? s : s + r.amount, 0);
+    const targetCut = res.rows.reduce((s, r) => isGuar(r) ? s : s + r.cut, 0);
     if (targetBet > 0) {
       const targetRatio = targetCut / targetBet;
       html += `<div class="rate"><div class="rate-main"><span>カット率（対象席のみ）</span><b class="cut">${(targetRatio * 100).toFixed(2)}%（${(targetRatio * 10).toFixed(1)}割カット）</b></div>`
@@ -486,15 +620,16 @@ function renderSide(res, L, GUARANTEE) {
   }
 
   // detail table with totals row
-  html += `<table class="rtable"><thead><tr>`
-        + `<th>席</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
+  html += `<table class="rtable${showSeatRate ? ' show-rate' : ''}"><thead><tr>`
+        + `<th class="seat-cell">席</th><th class="rate-col">率</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
         + `</tr></thead><tbody>`;
   res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
-    const mark = r.fixed ? `<span class="fixed-mark">保障</span>` : '';
+    const mark = (res.state === 'cut' && isGuar(r)) ? `<span class="guar-mark">✱</span>` : '';
     html += `<tr>`
-          + `<td>${r.seat}</td>`
+          + `<td class="seat-cell">${r.seat}</td>`
+          + `<td class="rate-col">${r.amount > 0 && r.cut > 0 ? (r.cut / r.amount * 100).toFixed(1) + '%' : '—'}</td>`
           + `<td>${fmt(r.amount)}</td>`
-          + `<td class="eff-col">${fmt(r.effective)}${mark}</td>`
+          + `<td class="eff-col">${mark}${fmt(r.effective)}</td>`
           + `<td class="refund">${r.cut > 0 ? fmt(r.cut) : '—'}</td>`
           + `</tr>`;
   });
@@ -503,7 +638,8 @@ function renderSide(res, L, GUARANTEE) {
   const effTotal = res.rows.reduce((s, r) => s + r.effective, 0);
   const cutTotal = res.rows.reduce((s, r) => s + r.cut, 0);
   html += `<tfoot><tr>`
-        + `<td>合計</td>`
+        + `<td class="seat-cell">合計</td>`
+        + `<td class="rate-col">${betTotal > 0 && cutTotal > 0 ? (cutTotal / betTotal * 100).toFixed(1) + '%' : '—'}</td>`
         + `<td>${fmt(betTotal)}</td>`
         + `<td class="eff-col">${fmt(effTotal)}</td>`
         + `<td class="cutnum">${cutTotal > 0 ? fmt(cutTotal) : '—'}</td>`
@@ -563,7 +699,8 @@ function calculate() {
     return;
   }
 
-  const res = computeSide(b.bets, s.L, s.GUARANTEE);
+  const fn = (calcMode === 'old') ? computeSideOld : computeSide;
+  const res = fn(b.bets, s.L, s.GUARANTEE);
   document.getElementById('res').innerHTML = renderSide(res, s.L, s.GUARANTEE);
   updateInlineCuts(res);
 }
@@ -576,6 +713,28 @@ function clearAll() {
 }
 
 document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+// ===== 詳細テーブル: 席列タップで個人カット率列を表示/非表示 =====
+// #res は再描画されるのでイベント委譲で拾う。率セルは常にDOMにありCSSで隠すだけ→クラス切替で即時。
+document.getElementById('res').addEventListener('click', (e) => {
+  if (!e.target.closest('.seat-cell')) return;
+  showSeatRate = !showSeatRate;
+  const t = document.querySelector('.rtable');
+  if (t) t.classList.toggle('show-rate', showSeatRate);
+});
+
+// ===== 計算モード切替（最新版 / 旧版）=====
+function syncCalcToggle() {
+  document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === calcMode));
+}
+document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
+  b.addEventListener('click', () => {
+    calcMode = b.dataset.mode;
+    saveCalcMode();
+    syncCalcToggle();
+    calculate();
+  }));
 
 // ===== view switching: calc / help / settings =====
 const views = {
@@ -633,10 +792,13 @@ function loadPrefs() {
     }
     const a = Number(localStorage.getItem(ACTIVE_KEY));
     if (Number.isInteger(a) && a >= 0 && a < 4) activeIdx = a;
+    const cm = localStorage.getItem(CALCMODE_KEY);
+    if (cm === 'old' || cm === 'latest') calcMode = cm;   // 不正値は無視
   } catch (e) { /* localStorage unavailable -> defaults */ }
 }
 function savePresets() { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); } catch (e) {} }
 function saveActive() { try { localStorage.setItem(ACTIVE_KEY, String(activeIdx)); } catch (e) {} }
+function saveCalcMode() { try { localStorage.setItem(CALCMODE_KEY, calcMode); } catch (e) {} }
 
 // push the active preset into the hidden L/保証 inputs and recompute
 function applyActive() {
@@ -726,6 +888,7 @@ document.addEventListener('keydown', e => {
 
 // ===== init: restore presets & active selection, then apply =====
 loadPrefs();
+syncCalcToggle();   // 復元した calcMode をトグルに反映
 applyActive();
 setCovered(true);   // always start on the blank white cover
 
