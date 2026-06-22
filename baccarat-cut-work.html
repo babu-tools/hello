@@ -523,16 +523,11 @@ function computeSideOld(bets, L, GUARANTEE) {
   const cutSum = () => bets.reduce((s, b) => s + cut[b.seat], 0);
   const required = T - L; // total that must be cut so effective <= L
 
-  // 2) never exceed the limit: if rounding under-cut, take an extra $100 from the
-  //    largest bet that still has headroom (ties -> lowest seat number).
-  let safety = 0;
-  while (cutSum() < required && safety++ <= bets.length * 100) {
-    const cand = bets
-      .filter(b => cut[b.seat] < maxCut[b.seat])
-      .sort((a, b) => b.amount - a.amount || a.seat - b.seat)[0];
-    if (!cand) break; // no headroom (floors already absorb everything)
-    cut[cand.seat] = Math.min(cut[cand.seat] + UNIT100, maxCut[cand.seat]);
-  }
+  // 2) 旧版の方針＝「最終カットは人間の判断」。
+  //    四捨五入で割り切れずに残った端数を、機械が勝手に最大ベット席へ押し付けると、
+  //    同額ベットの中でも席番号の若い人だけが余分に切られて不公平になる（例: 席1だけ$100）。
+  //    そこでここでは自動で足し込まず、端数は remainder として残し、候補席を提示して
+  //    人間が手でカットする方式にする（候補の算出は単調性ガードの後で行う）。
 
   // 3) defensive monotonicity guard: bigger bet must not get a smaller cut.
   //    Bump the larger-bet seat by $100 (stays <= limit) until order is restored.
@@ -550,19 +545,36 @@ function computeSideOld(bets, L, GUARANTEE) {
     if (!fixed) break;
   }
 
+  // 4) 人間が決める端数（remainder）と、その候補席を算出する。
+  //    remainder = まだ切り切れていない額（これを人間が手でカットすれば上限ちょうどになる）。
+  //    候補席 = まだ余地があり、ベットが最大の席。同額なら全員を候補にして人間に選ばせる
+  //    （＝同額席のあいだで機械が勝手に1人だけ切る不公平を避ける）。
+  const remainder = Math.max(0, required - cutSum());
+  let candSeats = [];
+  if (remainder > 0) {
+    const withRoom = bets.filter(b => cut[b.seat] < maxCut[b.seat]);
+    if (withRoom.length > 0) {
+      const maxBet = Math.max.apply(null, withRoom.map(b => b.amount));
+      candSeats = withRoom.filter(b => b.amount === maxBet)
+                          .map(b => b.seat)
+                          .sort((a, b) => a - b);
+    }
+  }
+
   // a seat pushed down to its guarantee floor (by the bump/guard steps) is also
   // guarantee-bound: mark it 保障 so its non-$100 cut (= bet - 保障) is explained.
   const rows = bets.map(b => ({
     seat: b.seat, amount: b.amount,
     effective: b.amount - cut[b.seat], cut: cut[b.seat],
     fixed: fixedSeats.has(b.seat) ||
-           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0)
+           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0),
+    cand: candSeats.indexOf(b.seat) >= 0
   }));
   const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
   const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
-  const diff = effectiveTotal - L; // + : over limit (should not happen), - : under limit
+  const diff = effectiveTotal - L; // + : over limit (= 人間が手でカットする端数), - : under limit
 
-  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, remainder, candSeats };
 }
 
 // ---- render result (single pool) ----
@@ -588,6 +600,8 @@ function renderSide(res, L, GUARANTEE) {
   let effNote, effNoteClass;
   if (res.state === 'nocut') {
     effNote = `上限 ${fmt(L)} 以内・カットなし`; effNoteClass = 'ok-note';
+  } else if (res.remainder > 0) {
+    effNote = `上限 ${fmt(L)} まで あと ${fmt(res.remainder)} は手動カット`; effNoteClass = 'cut-note';
   } else if (res.diff > 0) {
     effNote = `上限 ${fmt(L)} を +${fmt(res.diff)} 超過`; effNoteClass = 'cut-note';
   } else if (res.diff < 0) {
@@ -601,6 +615,20 @@ function renderSide(res, L, GUARANTEE) {
         + `<div class="stat stat-cut"><span class="stat-label">カット数合計</span><span class="stat-val">${cutTotalVal > 0 ? fmt(cutTotalVal) : '—'}</span></div>`
         + `<div class="stat stat-eff"><span class="stat-label">有効ベット合計</span><span class="stat-val">${fmt(effTotalVal)}</span><span class="stat-note ${effNoteClass}">${effNote}</span></div>`
         + `</div>`;
+
+  // 旧版のみ: 機械で割り切れない端数を「人間が手でカットする分」として提示する。
+  // （最新版は remainder を返さないので、このボックスは出ない）
+  if (res.state === 'cut' && res.remainder > 0) {
+    const seatLabel = (res.candSeats && res.candSeats.length)
+      ? res.candSeats.map(s => '席' + s).join('・')
+      : '余地のある席';
+    const candBet = (res.candSeats && res.candSeats.length)
+      ? res.rows.find(r => r.seat === res.candSeats[0]).amount : 0;
+    html += `<div class="remainder-box">`
+          + `<div>機械で割り切れない端数 <b>${fmt(res.remainder)}</b> が残っています。旧版は<b>最終カットを人間が判断</b>します。</div>`
+          + `<div>候補: <b>${seatLabel}</b>${candBet ? `（同額 ${fmt(candBet)}）` : ''} から <b>${fmt(res.remainder)}</b> をカットすると上限 ${fmt(L)} ちょうどになります。</div>`
+          + `</div>`;
+  }
 
   if (res.state === 'cut') {
     html += `<div class="rates">`;
@@ -625,7 +653,7 @@ function renderSide(res, L, GUARANTEE) {
         + `</tr></thead><tbody>`;
   res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
     const mark = (res.state === 'cut' && isGuar(r)) ? `<span class="guar-mark">✱</span>` : '';
-    html += `<tr>`
+    html += `<tr class="${r.cand ? 'cand' : ''}">`
           + `<td class="seat-cell">${r.seat}</td>`
           + `<td class="rate-col">${r.amount > 0 && r.cut > 0 ? (r.cut / r.amount * 100).toFixed(1) + '%' : '—'}</td>`
           + `<td>${fmt(r.amount)}</td>`
