@@ -545,6 +545,46 @@ function computeSideOld(bets, L, GUARANTEE) {
     if (!fixed) break;
   }
 
+  // 3b) 有効ベット逆転ガード: ベットが多い席の有効ベットが、それより少ないベットの
+  //      席を下回ってはいけない。起きたら削りすぎなので大ベット席のカットを$100戻す。
+  //      （戻す＝減らす方向だけ。戻した分はすべて remainder=人間判断へ回る）
+  let eg = 0;
+  while (eg++ <= bets.length * bets.length) {
+    let f = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount > b.amount &&
+            (a.amount - cut[a.seat]) < (b.amount - cut[b.seat]) &&
+            cut[a.seat] >= UNIT100) {
+          cut[a.seat] -= UNIT100;
+          f = true;
+        }
+      }
+    }
+    if (!f) break;
+  }
+
+  // 3c) 端数を機械が安全な範囲で $100 ずつ自動カットし、最後の ≤$100 を人間判断に残す。
+  //     各 $100 は安全なときだけ切る: トップ席（=余地のある最大ベット席）が単独で、
+  //     切っても自分より少なく賭けた席の有効ベットを下回らず（逆転回避）、保証床を割らないとき。
+  //     同額トップが複数・逆転が出る・残りが $100 以下になったら止めて人間判断（remainder）へ。
+  let g3c = 0;
+  while ((required - cutSum()) > UNIT100 && g3c++ <= bets.length * bets.length) {
+    const room3c = bets.filter(b => cut[b.seat] < maxCut[b.seat]);
+    if (room3c.length === 0) break;
+    const top3c = Math.max.apply(null, room3c.map(b => b.amount));
+    const tops3c = room3c.filter(b => b.amount === top3c);
+    if (tops3c.length !== 1) break;                  // 同額トップ複数 → 人間判断へ（不公平回避）
+    const s = tops3c[0].seat;
+    const newEff = tops3c[0].amount - (cut[s] + UNIT100);
+    let safe = (cut[s] + UNIT100) <= maxCut[s];       // 保証床を割らない
+    for (const b of bets) {                           // 自分より少なく賭けた席を下回らない（逆転回避）
+      if (b.amount < tops3c[0].amount && newEff < (b.amount - cut[b.seat])) safe = false;
+    }
+    if (!safe) break;
+    cut[s] += UNIT100;
+  }
+
   // 4) 人間が決める端数（remainder）と、その候補席を算出する。
   //    remainder = まだ切り切れていない額（これを人間が手でカットすれば上限ちょうどになる）。
   //    候補席 = まだ余地があり、ベットが最大の席。同額なら全員を候補にして人間に選ばせる
