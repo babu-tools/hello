@@ -585,21 +585,67 @@ function computeSideOld(bets, L, GUARANTEE) {
     cut[s] += UNIT100;
   }
 
-  // 4) 人間が決める端数（remainder）と、その候補席を算出する。
-  //    remainder = まだ切り切れていない額（これを人間が手でカットすれば上限ちょうどになる）。
-  //    候補席 = まだ余地があり、ベットが最大の席。同額なら全員を候補にして人間に選ばせる
-  //    （＝同額席のあいだで機械が勝手に1人だけ切る不公平を避ける）。
-  const remainder = Math.max(0, required - cutSum());
-  let candSeats = [];
-  if (remainder > 0) {
-    const withRoom = bets.filter(b => cut[b.seat] < maxCut[b.seat]);
-    if (withRoom.length > 0) {
-      const maxBet = Math.max.apply(null, withRoom.map(b => b.amount));
-      candSeats = withRoom.filter(b => b.amount === maxBet)
-                          .map(b => b.seat)
-                          .sort((a, b) => a - b);
+  // 3d) 整列の戻し: ここまでで残った「逆転」を、機械が確定せず人間判断(remainder)へ回す。
+  //     逆転を生む席のカットを、チップを割らない範囲(cut%100 ≦ bet%100)・保証床を割らない
+  //     範囲で $10 刻みに“控えめに戻す”。減算のみなので必ず停止し、最悪でもカットを $0 まで
+  //     戻せば逆転は必ず消える（戻した分は step4 の remainder に乗り、人間が手でカットする）。
+  const effOf = s => betOf[s] - cut[s];
+  const chipOK = (s, v) => v >= 0 && v <= maxCut[s] && (v % UNIT100) <= (betOf[s] % UNIT100);
+  const reduceTo = (s, target) => {                  // cut[s] を target 以下のチップ合法な最大値へ
+    let v = Math.min(cut[s], target);
+    while (v >= 0 && !chipOK(s, v)) v -= INPUT_UNIT;
+    if (v >= 0 && v < cut[s]) { cut[s] = v; return true; }
+    return false;
+  };
+  let g3d = 0;
+  while (g3d++ <= bets.length * bets.length * 8) {
+    let changed = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount <= b.amount) continue;
+        // カット逆転: 多く賭けた a のカットが小さい → 少ない b のカットを cut[a] 以下へ戻す
+        if (cut[a.seat] < cut[b.seat] && reduceTo(b.seat, cut[a.seat])) changed = true;
+        // 有効ベット逆転: 多く賭けた a の有効が小さい → a のカットを下げ eff[a] ≧ eff[b] にする
+        if (effOf(a.seat) < effOf(b.seat) &&
+            reduceTo(a.seat, betOf[a.seat] - effOf(b.seat))) changed = true;
+      }
     }
+    if (!changed) break;
   }
+
+  // 4) 人間が決める端数（remainder）と、その「均等な切り方」を助言する。
+  //    remainder = まだ切り切れていない額（これを人間が手でカットすれば上限ちょうどになる）。
+  //    助言 = 端数を「有効ベットが高い席」から $10 刻みで均等に配る。各 $10 は、保証床を割らず・
+  //    $100チップを割らず（cut%100 ≦ bet%100）・逆転を生まないときだけ。結果 suggest=[{seat,add}]。
+  //    cut[] は変えない（＝確定は人間。同額上位席へ均等に切る案を提示するだけ）。
+  const remainder = Math.max(0, required - cutSum());
+  let suggest = [];
+  if (remainder > 0) {
+    const add = {}; bets.forEach(b => add[b.seat] = 0);
+    const effWith = b => b.amount - cut[b.seat] - add[b.seat];
+    let rem = remainder, gR = 0;
+    while (rem >= INPUT_UNIT && gR++ < 100000) {
+      let pick = null, pickEff = -1;
+      for (const b of bets) {
+        const nv = cut[b.seat] + add[b.seat] + INPUT_UNIT;
+        if (nv > maxCut[b.seat]) continue;                  // 保証床を割らない
+        if ((nv % UNIT100) > (b.amount % UNIT100)) continue; // $100チップを割らない
+        const newEff = b.amount - nv;
+        let safe = true;                                     // 自分より少なく賭けた席を下回らない
+        for (const o of bets) {
+          if (o.seat !== b.seat && o.amount < b.amount && newEff < effWith(o)) { safe = false; break; }
+        }
+        if (!safe) continue;
+        if (effWith(b) > pickEff) { pickEff = effWith(b); pick = b; } // 有効が最も高い席へ
+      }
+      if (!pick) break;
+      add[pick.seat] += INPUT_UNIT; rem -= INPUT_UNIT;
+    }
+    suggest = bets.filter(b => add[b.seat] > 0)
+                  .map(b => ({ seat: b.seat, add: add[b.seat] }))
+                  .sort((a, b) => a.seat - b.seat);
+  }
+  const candSeats = suggest.map(s => s.seat);
 
   // a seat pushed down to its guarantee floor (by the bump/guard steps) is also
   // guarantee-bound: mark it 保障 so its non-$100 cut (= bet - 保障) is explained.
@@ -614,7 +660,7 @@ function computeSideOld(bets, L, GUARANTEE) {
   const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
   const diff = effectiveTotal - L; // + : over limit (= 人間が手でカットする端数), - : under limit
 
-  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, remainder, candSeats };
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, remainder, candSeats, suggest };
 }
 
 // ---- render result (single pool) ----
@@ -659,14 +705,23 @@ function renderSide(res, L, GUARANTEE) {
   // 旧版のみ: 機械で割り切れない端数を「人間が手でカットする分」として提示する。
   // （最新版は remainder を返さないので、このボックスは出ない）
   if (res.state === 'cut' && res.remainder > 0) {
-    const seatLabel = (res.candSeats && res.candSeats.length)
-      ? res.candSeats.map(s => '席' + s).join('・')
-      : '余地のある席';
-    const candBet = (res.candSeats && res.candSeats.length)
-      ? res.rows.find(r => r.seat === res.candSeats[0]).amount : 0;
+    const sug = res.suggest || [];
+    const sugTotal = sug.reduce((s, x) => s + x.add, 0);
+    let detail;
+    if (sug.length === 0) {
+      detail = `余地のある席から <b>${fmt(res.remainder)}</b> をカット`;
+    } else if (sug.length === 1) {
+      detail = `<b>席${sug[0].seat}</b> から <b>${fmt(sug[0].add)}</b> をカット`;
+    } else if (sug.every(x => x.add === sug[0].add)) {
+      detail = `<b>${sug.map(x => '席' + x.seat).join('・')}</b> へ <b>${fmt(sug[0].add)} ずつ</b>カット`;
+    } else {
+      detail = sug.map(x => `席${x.seat} に <b>${fmt(x.add)}</b>`).join('・') + ' をカット';
+    }
+    // 助言で端数を切り切れない場合は、残りも併記
+    const leftover = res.remainder - sugTotal;
     html += `<div class="remainder-box">`
           + `<div>機械で割り切れない端数 <b>${fmt(res.remainder)}</b> が残っています。旧版は<b>最終カットを人間が判断</b>します。</div>`
-          + `<div>候補: <b>${seatLabel}</b>${candBet ? `（同額 ${fmt(candBet)}）` : ''} から <b>${fmt(res.remainder)}</b> をカットすると上限 ${fmt(L)} ちょうどになります。</div>`
+          + `<div>おすすめ: ${detail} すると上限 ${fmt(L)} ${leftover > 0 ? `に近づきます（あと ${fmt(leftover)} は別途調整）` : 'ちょうどになります'}。</div>`
           + `</div>`;
   }
 
