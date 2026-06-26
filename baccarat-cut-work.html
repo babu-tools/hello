@@ -218,6 +218,7 @@
         <div class="calc-toggle">
           <button type="button" data-mode="latest">最新版</button>
           <button type="button" data-mode="old">旧版</button>
+          <button type="button" data-mode="fair">10単位</button>
         </div>
       </div>
       <div id="res"><div class="empty">ベット額を入力すると結果が表示されます。</div></div>
@@ -664,6 +665,115 @@ function computeSideOld(bets, L, GUARANTEE) {
   return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, remainder, candSeats, suggest };
 }
 
+// ---- core computation: 公平版（$10単位カット・完全公平按分） ----
+// 方針: 既存2版が持つ「$100チップ非分割(cut%100≤bet%100)」制約を撤廃し、$10単位で削る。
+//   ・前段は computeSide と同じ「保証床つき反復比例按分」で実数 rawEff(合計=L)を得る。
+//   ・rawEff を $10 粒度へ最大剰余法で丸め、有効ベット合計を上限ちょうど(=L)に合わせる。
+//   ・最低保証の床(min(bet,GUARANTEE))は維持。bet/L/保証は$10(保証は$100)単位なので
+//     required=T-L は$10の倍数 → 端数は出ず remainder/手動カットは不要(diff=0)。
+//   ・逆転禁止: ベット昇順で cut・有効ベットとも非減少。丸めのタイブレークでこれを保つ。
+function computeSideFair(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  // 保証床つき反復比例按分 -> rawEff（実数, 合計=L, ベット昇順で非減少）
+  let active = bets.slice();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // ---- $10粒度への最大剰余法（合計をLちょうどに合わせる）----
+  // 各席を floor10(rawEff) に落とし、残り単位を「端数(frac)が大きい席」から $10 ずつ加える。
+  // 逆転禁止のため、frac 同値はベットが大きい席を優先(ceilを先に与える)。
+  const eff = {};
+  bets.forEach(b => eff[b.seat] = Math.floor(rawEff[b.seat] / INPUT_UNIT) * INPUT_UNIT);
+  let units = Math.round((L - bets.reduce((s, b) => s + eff[b.seat], 0)) / INPUT_UNIT);
+
+  // 加点候補: eff を上げてもベットを超えない(cut≥0)席のみ
+  const order = bets.slice()
+    .filter(b => eff[b.seat] + INPUT_UNIT <= b.amount)
+    .map(b => ({ seat: b.seat, amount: b.amount, frac: rawEff[b.seat] - eff[b.seat] }))
+    .sort((a, b) => b.frac - a.frac || b.amount - a.amount || a.seat - b.seat);
+
+  // frac の大きい席から1単位ずつ。1巡で配り切れない端数は同順で次巡へ回す。
+  let oi = 0;
+  while (units > 0 && order.length > 0) {
+    const cand = order[oi % order.length];
+    if (eff[cand.seat] + INPUT_UNIT <= cand.amount) { eff[cand.seat] += INPUT_UNIT; units--; }
+    oi++;
+    if (oi > order.length * 1000) break; // 安全弁（通常到達しない）
+  }
+
+  const cut = {};
+  bets.forEach(b => cut[b.seat] = b.amount - eff[b.seat]);
+
+  // ---- 逆転修復: ベット昇順で cut・有効ベットが非減少になるよう、合計Lを保ったまま$10を移す ----
+  // 多く賭けた a の cut が少なく賭けた b より小さい/有効が大きい場合、b→a へ$10移す
+  // (a:eff↓ cut↑ / b:eff↑ cut↓)。床と cut≥0 を守れるときのみ。減算は起きないが念のため上限回数で停止。
+  const asc = bets.slice().sort((a, b) => a.amount - b.amount || a.seat - b.seat);
+  let guard = 0;
+  while (guard++ <= bets.length * bets.length * 4) {
+    let changed = false;
+    for (let i = 0; i < asc.length; i++) {
+      for (let j = 0; j < i; j++) {
+        const a = asc[i], b = asc[j]; // amount[a] >= amount[b]
+        if (a.amount === b.amount) continue;
+        const needCut = cut[a.seat] < cut[b.seat];
+        const needEff = eff[a.seat] < eff[b.seat];
+        if (!needCut && !needEff) continue;
+        // b から a へ $10 移す: a.eff--, b.eff++（床/上限を守れるとき）
+        if (eff[a.seat] - INPUT_UNIT >= floor[a.seat] && eff[b.seat] + INPUT_UNIT <= b.amount) {
+          eff[a.seat] -= INPUT_UNIT; cut[a.seat] += INPUT_UNIT;
+          eff[b.seat] += INPUT_UNIT; cut[b.seat] -= INPUT_UNIT;
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+
+  const isGuarFixed = (s) => GUARANTEE > 0 && floor[s] === GUARANTEE && cut[s] === (bets.find(b => b.seat === s).amount - floor[s]) && cut[s] > 0;
+  const rows = bets.map(b => ({
+    seat: b.seat, amount: b.amount,
+    effective: eff[b.seat], cut: cut[b.seat],
+    fixed: isGuarFixed(b.seat)
+  }));
+  const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
+  const diff = effectiveTotal - L;
+
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff };
+}
+
 // ---- render result (single pool) ----
 function renderSide(res, L, GUARANTEE) {
   if (res.state === 'none') {
@@ -826,7 +936,7 @@ function calculate() {
     return;
   }
 
-  const fn = (calcMode === 'old') ? computeSideOld : computeSide;
+  const fn = calcMode === 'old' ? computeSideOld : calcMode === 'fair' ? computeSideFair : computeSide;
   const res = fn(b.bets, s.L, s.GUARANTEE);
   document.getElementById('res').innerHTML = renderSide(res, s.L, s.GUARANTEE);
   updateInlineCuts(res);
@@ -920,7 +1030,7 @@ function loadPrefs() {
     const a = Number(localStorage.getItem(ACTIVE_KEY));
     if (Number.isInteger(a) && a >= 0 && a < 4) activeIdx = a;
     const cm = localStorage.getItem(CALCMODE_KEY);
-    if (cm === 'old' || cm === 'latest') calcMode = cm;   // 不正値は無視
+    if (cm === 'old' || cm === 'latest' || cm === 'fair') calcMode = cm;   // 不正値は無視
   } catch (e) { /* localStorage unavailable -> defaults */ }
 }
 function savePresets() { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); } catch (e) {} }
