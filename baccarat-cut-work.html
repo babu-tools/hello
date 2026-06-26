@@ -139,6 +139,7 @@
   .rtable td.eff-col { color: var(--ok); }
   .rtable tfoot td.eff-col { color: var(--ok); }
   .rtable tr.cand td { background: #2a2305; }
+  .sug-cut { color: var(--cutnum); font-weight: 700; margin-right: 6px; }
   .rtable .rate-col { display: none; }                  /* 既定は非表示 */
   .rtable.show-rate .rate-col { display: table-cell; }  /* 席列タップで表示 */
   .rtable td.rate-col { color: var(--cutnum); }
@@ -746,13 +747,16 @@ function renderSide(res, L, GUARANTEE) {
   html += `<table class="rtable${showSeatRate ? ' show-rate' : ''}"><thead><tr>`
         + `<th class="seat-cell">席</th><th class="rate-col">率</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
         + `</tr></thead><tbody>`;
+  const sugMap = {};
+  (res.suggest || []).forEach(s => sugMap[s.seat] = s.add);
   res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
     const mark = (res.state === 'cut' && isGuar(r)) ? `<span class="guar-mark">✱</span>` : '';
+    const sugBadge = sugMap[r.seat] ? `<span class="sug-cut">${sugMap[r.seat].toLocaleString('en-US')}</span>` : '';
     html += `<tr class="${r.cand ? 'cand' : ''}">`
           + `<td class="seat-cell">${r.seat}</td>`
           + `<td class="rate-col">${r.amount > 0 && r.cut > 0 ? (r.cut / r.amount * 100).toFixed(1) + '%' : '—'}</td>`
           + `<td>${fmt(r.amount)}</td>`
-          + `<td class="eff-col">${mark}${fmt(r.effective)}</td>`
+          + `<td class="eff-col">${sugBadge}${mark}${fmt(r.effective)}</td>`
           + `<td class="refund">${r.cut > 0 ? fmt(r.cut) : '—'}</td>`
           + `</tr>`;
   });
