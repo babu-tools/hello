@@ -75,11 +75,24 @@ function invariantCheck(res, L, G, label) {
   check(effTotal <= L, label + ': ★有効ベット合計が上限を超過 (' + effTotal + ' > ' + L + ')');
   check(effTotal + cutTotal === betTotal, label + ': ベット保存則が崩れ');
 
-  // ★端数0: カット状態なら有効ベット合計はちょうど上限（手動カット不要）
+  // ★端数の扱い: 同額で割り切れない分 tieRemainder を除けば上限ちょうど
   if (res.state === 'cut') {
-    check(effTotal === L, label + ': ★上限ちょうどでない（端数残り ' + (L - effTotal) + '）');
-    check(cutTotal === betTotal - L, label + ': カット合計が required と不一致');
+    var tie = res.tieRemainder || 0;
+    check(tie >= 0 && tie % INPUT_UNIT === 0, label + ': tieRemainder が不正 (' + tie + ')');
+    check(effTotal === L - tie, label + ': ★上限-tieRemainder と不一致 (eff=' + effTotal + ', L=' + L + ', tie=' + tie + ')');
+    check(cutTotal === betTotal - L + tie, label + ': カット合計が required+tie と不一致');
+    if (tie > 0) check((res.candSeats || []).length >= 2, label + ': tieRemainder>0 なのに候補席(同額)が無い');
   }
+
+  // ★同額席は全員同じカット（機械が同額の中で勝手に差をつけない）
+  var byAmt = {};
+  rows.forEach(function (r) { (byAmt[r.amount] = byAmt[r.amount] || []).push(r.cut); });
+  Object.keys(byAmt).forEach(function (a) {
+    var cuts = byAmt[a];
+    for (var k = 1; k < cuts.length; k++) {
+      check(cuts[k] === cuts[0], label + ': 同額席($' + a + ')でカットが不一致 (' + cuts.join('/') + ')');
+    }
+  });
 
   // ★逆転禁止: ベット昇順で cut・有効ベットとも非減少
   var ord = rows.slice().sort(function (a, b) { return a.amount - b.amount; });
@@ -113,7 +126,7 @@ for (var t = 0; t < TRIALS; t++) {
 print('');
 print('実行: ' + htmlPath + '（computeSideFair）');
 print('総当り: ' + TRIALS + ' 通り（G∈{300,400,500}, ベット$10刻み≤$5000, 上限$500〜$8000）');
-print('検査: 端数0/上限ちょうど・保証床維持・逆転0・$10単位・ベット保存');
+print('検査: (上限-tieRemainder)ちょうど・同額席は同カット・保証床維持・逆転0・$10単位・ベット保存');
 print('-----------------------------------------');
 if (failures.length === 0) {
   print('✅ 全テスト通過');
