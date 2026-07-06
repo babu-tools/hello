@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<title>投資判断ダッシュボード</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --up: #3fb950; --down: #f85149; --warn: #d29922;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 1000;
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+  header h1 { font-size: 17px; white-space: nowrap; }
+  header h1 span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  #clock { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #refreshBtn {
+    background: var(--accent); color: #0d1117; border: none; padding: 7px 14px;
+    border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px;
+  }
+  #refreshBtn:hover { opacity: .85; }
+
+  /* サマリーバー */
+  #summaryBar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--panel); font-size: 13px;
+  }
+  #summaryBar .verdict { font-weight: bold; font-size: 15px; padding: 4px 12px; border-radius: 16px; }
+  .v-on  { background: rgba(63,185,80,.15);  color: var(--up); }
+  .v-mid { background: rgba(210,153,34,.15); color: var(--warn); }
+  .v-off { background: rgba(248,81,73,.15);  color: var(--down); }
+  .v-na  { background: rgba(139,148,158,.15); color: var(--muted); }
+  #summaryBar .item { color: var(--muted); }
+  #summaryBar .item b { color: var(--text); }
+
+  nav {
+    display: flex; gap: 2px; padding: 6px 12px 0; background: var(--panel);
+    border-bottom: 1px solid var(--border); position: sticky; z-index: 999;
+  }
+  nav button {
+    background: none; border: none; color: var(--muted); padding: 10px 12px;
+    font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: bold; }
+  .section { display: none; padding: 14px 16px 40px; }
+  .section.active { display: block; }
+  .ticker-wrap { border-bottom: 1px solid var(--border); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .card h2 {
+    font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .symbol-btns { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .symbol-btns button, .subtabs button, .mapbtns button, .pill {
+    background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 14px; font-size: 12px; cursor: pointer;
+  }
+  .symbol-btns button.active, .subtabs button.active, .mapbtns button.active {
+    background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: bold;
+  }
+  .subtabs, .mapbtns { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+
+  /* ウォッチリスト */
+  #watchCards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; padding: 12px; }
+  .watch-card { position: relative; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; height: 190px; }
+  .watch-card .rm {
+    position: absolute; top: 4px; right: 4px; z-index: 5; background: var(--panel);
+    border: 1px solid var(--border); color: var(--muted); border-radius: 50%;
+    width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1;
+  }
+  .watch-add { display: flex; gap: 8px; padding: 0 12px 12px; }
+  .watch-add input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: 6px; font-size: 13px;
+  }
+  .watch-add button { background: var(--up); color: #0d1117; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+  /* F&Gゲージ */
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; padding: 16px 10px 20px; }
+  .gauge-val { font-size: 30px; font-weight: bold; margin-top: -8px; }
+  .gauge-cls { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  .news-list { list-style: none; }
+  .news-list li { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+  .news-list a { color: var(--text); text-decoration: none; font-size: 14px; line-height: 1.5; }
+  .news-list a:hover { color: var(--accent); }
+  .news-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .loading, .error { color: var(--muted); padding: 20px; text-align: center; }
+  .error { color: var(--down); }
+
+  #mapArea { height: 65vh; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; position: relative; }
+  #flightMap, #shipFrame { width: 100%; height: 100%; }
+  #shipFrame { border: none; }
+  .map-note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  #flightInfo {
+    position: absolute; bottom: 10px; left: 10px; z-index: 800;
+    background: rgba(13,17,23,.85); padding: 8px 12px; border-radius: 6px; font-size: 12px;
+  }
+  .plane-icon { font-size: 18px; text-shadow: 0 0 3px #000; }
+  footer { padding: 14px 16px 90px; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); line-height: 1.7; }
+
+  /* ===== iPhone最適化: 下部タブバー ===== */
+  @media (max-width: 700px) {
+    .grid, .grid3 { grid-template-columns: 1fr; }
+    header h1 { font-size: 15px; }
+    #clock { display: none; }
+    nav {
+      position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+      justify-content: space-around; padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border); border-bottom: none; background: var(--panel);
+    }
+    nav button {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      font-size: 10px; padding: 6px 8px; border-bottom: none; border-top: 2px solid transparent;
+    }
+    nav button.active { border-top-color: var(--accent); }
+    nav button .ico { font-size: 20px; }
+    #summaryBar { gap: 8px; font-size: 12px; }
+    #mapArea { height: 60vh; }
+  }
+  @media (min-width: 701px) { nav button .ico { margin-right: 4px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 投資判断<span>ダッシュボード</span></h1>
+  <div class="header-right">
+    <span id="clock"></span>
+    <button id="refreshBtn" onclick="refreshAll()">🔄 更新</button>
+  </div>
+</header>
+
+<!-- 今の市場サマリー -->
+<div id="summaryBar">
+  <span class="verdict v-na" id="verdict">判定中…</span>
+  <span class="item">株式 恐怖強欲: <b id="sumStockFG">—</b></span>
+  <span class="item">暗号資産 恐怖強欲: <b id="sumCryptoFG">—</b></span>
+  <span class="item" id="sumUpdated"></span>
+</div>
+
+<!-- ティッカーテープ -->
+<div class="ticker-wrap">
+  <div class="tradingview-widget-container">
+    <div class="tradingview-widget-container__widget"></div>
+    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+    {
+      "symbols": [
+        {"proName":"FX:USDJPY","title":"ドル円"},
+        {"proName":"INDEX:NKY","title":"日経225"},
+        {"proName":"FOREXCOM:SPXUSD","title":"S&P500"},
+        {"proName":"FOREXCOM:NSXUSD","title":"NASDAQ100"},
+        {"proName":"TVC:VIX","title":"VIX"},
+        {"proName":"TVC:US10Y","title":"米10年債"},
+        {"proName":"BITSTAMP:BTCUSD","title":"BTC"},
+        {"proName":"TVC:GOLD","title":"金"},
+        {"proName":"TVC:USOIL","title":"WTI原油"}
+      ],
+      "showSymbolLogo": true, "colorTheme": "dark", "isTransparent": true,
+      "displayMode": "adaptive", "locale": "ja"
+    }
+    </script>
+  </div>
+</div>
+
+<nav>
+  <button data-tab="market" onclick="showTab('market', this)"><span class="ico">📈</span>市場</button>
+  <button data-tab="analysis" onclick="showTab('analysis', this)"><span class="ico">🧭</span>分析</button>
+  <button data-tab="heatmap" onclick="showTab('heatmap', this)"><span class="ico">🔥</span>ヒートマップ</button>
+  <button data-tab="news" onclick="showTab('news', this)"><span class="ico">📰</span>ニュース</button>
+  <button data-tab="map" onclick="showTab('map', this)"><span class="ico">🚢</span>船舶航空</button>
+</nav>
+
+<!-- ===== 市場 ===== -->
+<div id="market" class="section">
+  <div class="card" style="margin-bottom:14px">
+    <h2>⭐ ウォッチリスト（自分の注目銘柄・次回も保存されます）</h2>
+    <div id="watchCards"></div>
+    <div class="watch-add">
+      <input id="watchInput" list="symList" placeholder="銘柄を選択または入力 (例: FX:EURJPY)">
+      <datalist id="symList">
+        <option value="FX:USDJPY">ドル円</option>
+        <option value="FX:EURJPY">ユーロ円</option>
+        <option value="FX:GBPJPY">ポンド円</option>
+        <option value="INDEX:NKY">日経225</option>
+        <option value="FOREXCOM:SPXUSD">S&P500</option>
+        <option value="FOREXCOM:NSXUSD">NASDAQ100</option>
+        <option value="FOREXCOM:DJI">NYダウ</option>
+        <option value="BITSTAMP:BTCUSD">ビットコイン</option>
+        <option value="BITSTAMP:ETHUSD">イーサリアム</option>
+        <option value="TVC:GOLD">金</option>
+        <option value="TVC:USOIL">WTI原油</option>
+        <option value="TVC:VIX">VIX恐怖指数</option>
+        <option value="TVC:US10Y">米10年債利回り</option>
+        <option value="TVC:DXY">ドル指数</option>
+        <option value="NASDAQ:AAPL">Apple</option>
+        <option value="NASDAQ:NVDA">NVIDIA</option>
+        <option value="NASDAQ:TSLA">Tesla</option>
+        <option value="TSE:7203">トヨタ自動車</option>
+      </datalist>
+      <button onclick="addWatch()">＋追加</button>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card" style="min-height:500px">
+      <h2>市場概況（指数・為替・暗号資産・商品）</h2>
+      <div class="tradingview-widget-container" style="height:560px">
+        <div class="tradingview-widget-container__widget"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js" async>
+        {
+          "colorTheme": "dark", "dateRange": "1D", "locale": "ja", "isTransparent": true,
+          "width": "100%", "height": 560, "showChart": true,
+          "tabs": [
+            { "title": "指数", "symbols": [
+              {"s":"INDEX:NKY","d":"日経225"},
+              {"s":"FOREXCOM:SPXUSD","d":"S&P500"},
+              {"s":"FOREXCOM:NSXUSD","d":"NASDAQ100"},
+              {"s":"FOREXCOM:DJI","d":"NYダウ"},
+              {"s":"INDEX:DEU40","d":"独DAX"},
+              {"s":"FOREXCOM:UKXGBP","d":"英FTSE100"}
+            ]},
+            { "title": "為替", "symbols": [
+              {"s":"FX:USDJPY","d":"ドル/円"},
+              {"s":"FX:EURJPY","d":"ユーロ/円"},
+              {"s":"FX:GBPJPY","d":"ポンド/円"},
+              {"s":"FX:EURUSD","d":"ユーロ/ドル"},
+              {"s":"FX:GBPUSD","d":"ポンド/ドル"},
+              {"s":"FX:AUDJPY","d":"豪ドル/円"}
+            ]},
+            { "title": "暗号資産", "symbols": [
+              {"s":"BITSTAMP:BTCUSD","d":"ビットコイン"},
+              {"s":"BITSTAMP:ETHUSD","d":"イーサリアム"},
+              {"s":"BINANCE:SOLUSDT","d":"ソラナ"},
+              {"s":"BINANCE:XRPUSDT","d":"XRP"}
+            ]},
+            { "title": "商品", "symbols": [
+              {"s":"TVC:GOLD","d":"金"},
+              {"s":"TVC:SILVER","d":"銀"},
+              {"s":"TVC:USOIL","d":"WTI原油"},
+              {"s":"TVC:UKOIL","d":"ブレント原油"},
+              {"s":"COMEX:HG1!","d":"銅"}
+            ]}
+          ]
+        }
+        </script>
+      </div>
+    </div>
+    <div class="card" style="min-height:500px">
+      <h2>詳細チャート</h2>
+      <div class="symbol-btns" id="chartBtns">
+        <button data-sym="FX:USDJPY" onclick="loadChart('FX:USDJPY', this)">ドル円</button>
+        <button data-sym="INDEX:NKY" onclick="loadChart('INDEX:NKY', this)">日経225</button>
+        <button data-sym="FOREXCOM:SPXUSD" onclick="loadChart('FOREXCOM:SPXUSD', this)">S&P500</button>
+        <button data-sym="FOREXCOM:NSXUSD" onclick="loadChart('FOREXCOM:NSXUSD', this)">NASDAQ</button>
+        <button data-sym="BITSTAMP:BTCUSD" onclick="loadChart('BITSTAMP:BTCUSD', this)">BTC</button>
+        <button data-sym="TVC:GOLD" onclick="loadChart('TVC:GOLD', this)">金</button>
+        <button data-sym="TVC:USOIL" onclick="loadChart('TVC:USOIL', this)">原油</button>
+      </div>
+      <div id="chartContainer" style="height:470px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 分析 ===== -->
+<div id="analysis" class="section">
+  <div class="grid" style="margin-bottom:14px">
+    <div class="card">
+      <h2>😱 恐怖と強欲指数（米国株）<span id="fgStockSrc" style="font-weight:normal">CNN Business</span></h2>
+      <div class="gauge-wrap" id="gaugeStock"><div class="loading">読み込み中…</div></div>
+    </div>
+    <div class="card">
+      <h2>😱 恐怖と強欲指数（暗号資産）<span style="font-weight:normal">alternative.me</span></h2>
+      <div class="gauge-wrap" id="gaugeCrypto"><div class="loading">読み込み中…</div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <h2>⚠️ リスク指標（VIX・米10年債利回り・ドル指数）— リスクオン/オフ判断の3点セット</h2>
+    <div class="grid3" id="riskPanel" style="padding:12px"></div>
+  </div>
+  <div class="card">
+    <h2>📅 経済指標カレンダー（重要度: 中〜高）— 相場が動く予定を事前に把握</h2>
+    <div id="econCal" style="height:520px"></div>
+  </div>
+</div>
+
+<!-- ===== ヒートマップ ===== -->
+<div id="heatmap" class="section">
+  <div class="subtabs">
+    <button class="active" id="hmStockBtn" onclick="showHeatmap('stock', this)">🇺🇸 米国株 (S&P500)</button>
+    <button id="hmCryptoBtn" onclick="showHeatmap('crypto', this)">🪙 暗号資産</button>
+  </div>
+  <div class="card"><div id="heatmapBox" style="height:600px"></div></div>
+  <p class="map-note">タイルの大きさ=時価総額、色=騰落率。緑が上昇・赤が下落。どのセクターに資金が向かっているか一目でわかります。</p>
+</div>
+
+<!-- ===== ニュース ===== -->
+<div id="news" class="section">
+  <div class="subtabs">
+    <button class="active" data-kind="business" onclick="loadNews('business', this)">💹 経済・金融</button>
+    <button data-kind="world" onclick="loadNews('world', this)">🌍 世界情勢</button>
+  </div>
+  <ul class="news-list" id="newsList"><li class="loading">読み込み中…</li></ul>
+</div>
+
+<!-- ===== 船舶・航空 ===== -->
+<div id="map" class="section">
+  <div class="mapbtns">
+    <button class="active" data-kind="ship" onclick="showMap('ship', this)">🚢 船舶 (AIS)</button>
+    <button data-kind="flight" onclick="showMap('flight', this)">✈️ 航空 (ADS-B)</button>
+  </div>
+  <div id="mapArea">
+    <iframe id="shipFrame" src="" loading="lazy"></iframe>
+    <div id="flightMap" style="display:none"></div>
+    <div id="flightInfo" style="display:none"></div>
+  </div>
+  <p class="map-note" id="mapNote">世界の船舶位置（VesselFinder提供・AISデータ）。ドラッグ／ズームで移動できます。</p>
+</div>
+
+<footer>
+  💡 iPhoneでアプリのように使うには: Safariの共有ボタン → 「ホーム画面に追加」。<br>
+  データ提供: TradingView（市況・カレンダー・ヒートマップ）/ CNN Business・alternative.me（恐怖強欲指数）/ Google News / VesselFinder（AIS）/ OpenSky Network（ADS-B）。
+  表示価格は遅延データを含みます。本ツールは情報提供のみを目的とし、投資勧誘・助言ではありません。投資判断はご自身の責任で行ってください。
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script>
+// ===== 状態 =====
+const S = {
+  get: (k, d) => { try { return JSON.parse(localStorage.getItem('dash_' + k)) ?? d; } catch { return d; } },
+  set: (k, v) => { try { localStorage.setItem('dash_' + k, JSON.stringify(v)); } catch {} }
+};
+let stockFG = null, cryptoFG = null;
+let currentNews = S.get('news', 'business');
+let currentMap = S.get('map', 'ship');
+let currentHeatmap = S.get('heatmap', 'stock');
+let flightMapInit = false, flightMap, planeLayer;
+let analysisInit = false, heatmapInit = false;
+
+// ===== 時計 =====
+function tick() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleString('ja-JP', { month:'numeric', day:'numeric', weekday:'short', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+setInterval(tick, 1000); tick();
+
+// ===== TradingViewウィジェット動的生成 =====
+function tvWidget(el, src, config) {
+  el.innerHTML = '';
+  const c = document.createElement('div'); c.className = 'tradingview-widget-container'; c.style.height = '100%';
+  const w = document.createElement('div'); w.className = 'tradingview-widget-container__widget'; w.style.height = '100%';
+  const s = document.createElement('script'); s.src = 'https://s3.tradingview.com/external-embedding/' + src; s.async = true;
+  s.innerHTML = JSON.stringify(config);
+  c.appendChild(w); c.appendChild(s); el.appendChild(c);
+}
+
+// ===== タブ切替 =====
+function showTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  (btn || document.querySelector(`nav button[data-tab="${id}"]`)).classList.add('active');
+  S.set('tab', id);
+  if (id === 'analysis' && !analysisInit) initAnalysis();
+  if (id === 'heatmap' && !heatmapInit) { heatmapInit = true; showHeatmap(currentHeatmap); }
+  if (id === 'map') {
+    if (currentMap === 'flight' && !flightMapInit) initFlightMap();
+    else if (flightMapInit && currentMap === 'flight') flightMap.invalidateSize();
+  }
+}
+
+// ===== 詳細チャート =====
+function loadChart(symbol, btn) {
+  document.querySelectorAll('#chartBtns button').forEach(b => b.classList.remove('active'));
+  (btn || document.querySelector(`#chartBtns button[data-sym="${symbol}"]`) || document.querySelector('#chartBtns button')).classList.add('active');
+  S.set('chart', symbol);
+  document.getElementById('chartContainer').innerHTML = '';
+  new TradingView.widget({
+    container_id: 'chartContainer', symbol: symbol, interval: '60',
+    timezone: 'Asia/Tokyo', theme: 'dark', style: '1', locale: 'ja',
+    hide_side_toolbar: true, allow_symbol_change: false, width: '100%', height: 470
+  });
+}
+
+// ===== ウォッチリスト =====
+function renderWatch() {
+  const syms = S.get('watchlist', ['FX:USDJPY', 'INDEX:NKY', 'BITSTAMP:BTCUSD']);
+  const box = document.getElementById('watchCards');
+  box.innerHTML = '';
+  if (!syms.length) { box.innerHTML = '<div class="loading">下の入力欄から銘柄を追加してください</div>'; return; }
+  syms.forEach(sym => {
+    const card = document.createElement('div'); card.className = 'watch-card';
+    const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '✕'; rm.title = '削除';
+    rm.onclick = () => { S.set('watchlist', S.get('watchlist', []).filter(s => s !== sym)); renderWatch(); };
+    const inner = document.createElement('div'); inner.style.height = '100%';
+    card.appendChild(rm); card.appendChild(inner); box.appendChild(card);
+    tvWidget(inner, 'embed-widget-mini-symbol-overview.js', {
+      symbol: sym, locale: 'ja', dateRange: '1M', colorTheme: 'dark',
+      isTransparent: true, autosize: true, largeChartUrl: ''
+    });
+  });
+}
+function addWatch() {
+  const input = document.getElementById('watchInput');
+  const sym = input.value.trim().toUpperCase();
+  if (!sym || !sym.includes(':')) { alert('「取引所:銘柄」形式で入力してください (例: FX:EURJPY)。候補リストからも選べます。'); return; }
+  const list = S.get('watchlist', []);
+  if (!list.includes(sym)) { list.push(sym); S.set('watchlist', list); }
+  input.value = ''; renderWatch();
+}
+
+// ===== 恐怖と強欲指数 =====
+const FG_COLORS = v => v < 25 ? '#f85149' : v < 45 ? '#db6d28' : v <= 55 ? '#d29922' : v <= 75 ? '#57ab5a' : '#3fb950';
+const FG_LABEL = v => v < 25 ? '極度の恐怖' : v < 45 ? '恐怖' : v <= 55 ? '中立' : v <= 75 ? '強欲' : '極度の強欲';
+
+function renderGauge(elId, value) {
+  const el = document.getElementById(elId);
+  if (value == null) { el.innerHTML = '<div class="error">取得できませんでした（更新で再試行）</div>'; return; }
+  const angle = -90 + value * 1.8;
+  el.innerHTML = `
+    <svg viewBox="0 0 200 120" style="width:220px;max-width:100%">
+      <path d="M20 100 A80 80 0 0 1 60.9 30.7" fill="none" stroke="#f85149" stroke-width="14" stroke-linecap="round"/>
+      <path d="M66 27.5 A80 80 0 0 1 134 27.5" fill="none" stroke="#d29922" stroke-width="14"/>
+      <path d="M139.1 30.7 A80 80 0 0 1 180 100" fill="none" stroke="#3fb950" stroke-width="14" stroke-linecap="round"/>
+      <g transform="rotate(${angle} 100 100)">
+        <line x1="100" y1="100" x2="100" y2="34" stroke="#e6edf3" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="100" cy="100" r="7" fill="#e6edf3"/>
+      </g>
+      <text x="18" y="116" fill="#8b949e" font-size="10">恐怖 0</text>
+      <text x="152" y="116" fill="#8b949e" font-size="10">強欲 100</text>
+    </svg>
+    <div class="gauge-val" style="color:${FG_COLORS(value)}">${value}</div>
+    <div class="gauge-cls">${FG_LABEL(value)}</div>`;
+}
+
+async function fetchFearGreed() {
+  // 暗号資産 (alternative.me — 公式無料API)
+  try {
+    const r = await fetch('https://api.alternative.me/fng/?limit=1');
+    const j = await r.json();
+    cryptoFG = parseInt(j.data[0].value);
+  } catch { cryptoFG = null; }
+  // 米国株 (CNN — プロキシ経由)
+  try {
+    const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://production.dataviz.cnn.io/index/fearandgreed/graphdata'));
+    const j = await r.json();
+    stockFG = Math.round(j.fear_and_greed.score);
+  } catch { stockFG = null; }
+  if (analysisInit) { renderGauge('gaugeStock', stockFG); renderGauge('gaugeCrypto', cryptoFG); }
+  updateSummary();
+}
+
+// ===== サマリーバー =====
+function updateSummary() {
+  const v = document.getElementById('verdict');
+  const vals = [stockFG, cryptoFG].filter(x => x != null);
+  document.getElementById('sumStockFG').textContent = stockFG != null ? `${stockFG} (${FG_LABEL(stockFG)})` : '—';
+  document.getElementById('sumCryptoFG').textContent = cryptoFG != null ? `${cryptoFG} (${FG_LABEL(cryptoFG)})` : '—';
+  document.getElementById('sumUpdated').textContent = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'}) + ' 更新';
+  if (!vals.length) { v.className = 'verdict v-na'; v.textContent = '判定不可'; return; }
+  const avg = vals.reduce((a, b) => a + b) / vals.length;
+  if (avg < 40)      { v.className = 'verdict v-off'; v.textContent = '🔴 リスクオフ（悲観）'; }
+  else if (avg <= 60){ v.className = 'verdict v-mid'; v.textContent = '🟡 中立'; }
+  else               { v.className = 'verdict v-on';  v.textContent = '🟢 リスクオン（楽観）'; }
+  v.title = '恐怖強欲指数の平均に基づく簡易判定';
+}
+
+// ===== 分析タブ初期化 =====
+function initAnalysis() {
+  analysisInit = true;
+  renderGauge('gaugeStock', stockFG); renderGauge('gaugeCrypto', cryptoFG);
+  const risk = document.getElementById('riskPanel');
+  risk.innerHTML = '';
+  [['TVC:VIX', 'VIX恐怖指数'], ['TVC:US10Y', '米10年債利回り'], ['TVC:DXY', 'ドル指数']].forEach(([sym]) => {
+    const d = document.createElement('div'); d.style.height = '190px'; risk.appendChild(d);
+    tvWidget(d, 'embed-widget-mini-symbol-overview.js', {
+      symbol: sym, locale: 'ja', dateRange: '3M', colorTheme: 'dark', isTransparent: true, autosize: true
+    });
+  });
+  tvWidget(document.getElementById('econCal'), 'embed-widget-events.js', {
+    colorTheme: 'dark', isTransparent: true, locale: 'ja', width: '100%', height: 520,
+    importanceFilter: '0,1', countryFilter: 'jp,us,eu,gb,cn'
+  });
+}
+
+// ===== ヒートマップ =====
+function showHeatmap(kind, btn) {
+  currentHeatmap = kind; S.set('heatmap', kind);
+  document.getElementById('hmStockBtn').classList.toggle('active', kind === 'stock');
+  document.getElementById('hmCryptoBtn').classList.toggle('active', kind === 'crypto');
+  const box = document.getElementById('heatmapBox');
+  if (kind === 'stock') {
+    tvWidget(box, 'embed-widget-stock-heatmap.js', {
+      exchanges: [], dataSource: 'SPX500', grouping: 'sector',
+      blockSize: 'market_cap_basic', blockColor: 'change', locale: 'ja',
+      colorTheme: 'dark', hasTopBar: true, isDataSetEnabled: true, isZoomEnabled: true,
+      hasSymbolTooltip: true, width: '100%', height: 600
+    });
+  } else {
+    tvWidget(box, 'embed-widget-crypto-coins-heatmap.js', {
+      dataSource: 'Crypto', blockSize: 'market_cap_calc', blockColor: '24h_close_change|5',
+      locale: 'ja', colorTheme: 'dark', hasTopBar: true, isDataSetEnabled: true,
+      isZoomEnabled: true, hasSymbolTooltip: true, width: '100%', height: 600
+    });
+  }
+}
+
+// ===== ニュース =====
+const FEEDS = {
+  business: 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ja&gl=JP&ceid=JP:ja',
+  world:    'https://news.google.com/rss/headlines/section/topic/WORLD?hl=ja&gl=JP&ceid=JP:ja'
+};
+async function loadNews(kind, btn) {
+  currentNews = kind; S.set('news', kind);
+  document.querySelectorAll('#news .subtabs button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
+  const list = document.getElementById('newsList');
+  list.innerHTML = '<li class="loading">読み込み中…</li>';
+  try {
+    let items = await fetchViaRss2Json(FEEDS[kind]);
+    if (!items || !items.length) items = await fetchViaProxy(FEEDS[kind]);
+    if (!items.length) throw new Error('empty');
+    list.innerHTML = items.slice(0, 20).map(it => `
+      <li><a href="${it.link}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>
+      <div class="news-meta">${it.source ? escapeHtml(it.source) + ' ・ ' : ''}${formatDate(it.pubDate)}</div></li>`).join('');
+  } catch {
+    list.innerHTML = '<li class="error">ニュースの取得に失敗しました。「更新」で再試行してください。</li>';
+  }
+}
+async function fetchViaRss2Json(feedUrl) {
+  const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feedUrl));
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (data.status !== 'ok') return null;
+  return data.items.map(it => ({ title: it.title, link: it.link, pubDate: it.pubDate,
+    source: (it.title.match(/ - ([^-]+)$/) || [])[1] || '' }));
+}
+async function fetchViaProxy(feedUrl) {
+  const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(feedUrl));
+  if (!res.ok) return [];
+  const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+  return [...xml.querySelectorAll('item')].map(it => ({
+    title: it.querySelector('title')?.textContent || '',
+    link: it.querySelector('link')?.textContent || '#',
+    pubDate: it.querySelector('pubDate')?.textContent || '',
+    source: it.querySelector('source')?.textContent || ''
+  }));
+}
+function formatDate(s) {
+  const d = new Date(s);
+  return isNaN(d) ? '' : d.toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ===== 船舶・航空 =====
+function showMap(kind, btn) {
+  currentMap = kind; S.set('map', kind);
+  document.querySelectorAll('.mapbtns button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
+  const ship = document.getElementById('shipFrame');
+  const flight = document.getElementById('flightMap');
+  const info = document.getElementById('flightInfo');
+  const note = document.getElementById('mapNote');
+  if (kind === 'ship') {
+    ship.style.display = 'block'; flight.style.display = 'none'; info.style.display = 'none';
+    note.textContent = '世界の船舶位置（VesselFinder提供・AISデータ）。ドラッグ／ズームで移動できます。';
+    if (!ship.src) loadShipMap();
+  } else {
+    ship.style.display = 'none'; flight.style.display = 'block'; info.style.display = 'block';
+    note.textContent = '日本周辺の航空機位置（OpenSky Network・ADS-Bデータ、匿名アクセスのため数分間隔の更新）。';
+    if (!flightMapInit) initFlightMap(); else { flightMap.invalidateSize(); fetchFlights(); }
+  }
+}
+function loadShipMap() {
+  document.getElementById('shipFrame').src = 'https://www.vesselfinder.com/aismap?zoom=6&lat=35.0&lon=138.0&names=true';
+}
+function initFlightMap() {
+  flightMapInit = true;
+  flightMap = L.map('flightMap').setView([36.5, 137.0], 5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 12
+  }).addTo(flightMap);
+  planeLayer = L.layerGroup().addTo(flightMap);
+  fetchFlights();
+}
+async function fetchFlights() {
+  const info = document.getElementById('flightInfo');
+  info.textContent = '航空機データ取得中…';
+  try {
+    const b = flightMap.getBounds();
+    const url = `https://opensky-network.org/api/states/all?lamin=${b.getSouth().toFixed(2)}&lomin=${b.getWest().toFixed(2)}&lamax=${b.getNorth().toFixed(2)}&lomax=${b.getEast().toFixed(2)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    planeLayer.clearLayers();
+    const states = (data.states || []).filter(s => s[5] != null && s[6] != null);
+    states.slice(0, 300).forEach(s => {
+      const [icao, callsign,, , , lon, lat, alt, , vel, track] = s;
+      const icon = L.divIcon({ className: '', iconSize: [20, 20],
+        html: `<div class="plane-icon" style="transform:rotate(${(track||0)-45}deg)">✈️</div>` });
+      L.marker([lat, lon], { icon }).addTo(planeLayer).bindPopup(
+        `<b>${(callsign||'').trim() || icao}</b><br>高度: ${alt ? Math.round(alt)+' m' : '—'}<br>速度: ${vel ? Math.round(vel*3.6)+' km/h' : '—'}`);
+    });
+    info.textContent = `表示中: ${Math.min(states.length,300)} 機 (${new Date().toLocaleTimeString('ja-JP')})`;
+  } catch {
+    info.textContent = '航空データ取得失敗（匿名APIの利用制限の可能性）。しばらく待って「更新」してください。';
+  }
+}
+
+// ===== 一括更新 =====
+function refreshAll() {
+  fetchFearGreed();
+  loadNews(currentNews);
+  if (currentMap === 'flight' && flightMapInit) fetchFlights();
+  if (currentMap === 'ship' && document.getElementById('map').classList.contains('active')) loadShipMap();
+  if (heatmapInit) showHeatmap(currentHeatmap);
+  if (analysisInit) { analysisInit = false; initAnalysis(); }
+  loadChart(S.get('chart', 'FX:USDJPY'));
+  renderWatch();
+}
+
+// ===== 初期化（前回の状態を復元）=====
+window.addEventListener('load', () => {
+  showTab(S.get('tab', 'market'));
+  loadChart(S.get('chart', 'FX:USDJPY'));
+  renderWatch();
+  loadNews(currentNews);
+  if (currentMap === 'ship') loadShipMap();
+  fetchFearGreed();
+});
+</script>
+</body>
+</html>
