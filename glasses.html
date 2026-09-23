@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>メガネ探知機</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{
+  --bg:#eef1ef; --surface:#ffffff; --ink:#18201c; --muted:#5d6b64; --line:#d3dbd6;
+  --accent:#0f7a5a; --warn:#c2410c; --warn-bg:#fff1e8; --maybe:#8a6d00; --maybe-bg:#fbf5dc;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f1512; --surface:#18201c; --ink:#e6ece8; --muted:#94a39b; --line:#2a3530;
+    --accent:#3ccf98; --warn:#ff8a4c; --warn-bg:#2b1a10; --maybe:#e6c34a; --maybe-bg:#27220e; color-scheme:dark;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.6 "Zen Kaku Gothic New",system-ui,sans-serif;
+  padding:max(16px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom));}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:26px;font-weight:900;margin:8px 0 0;letter-spacing:.02em}
+.sub{color:var(--muted);margin:0;font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.status{display:flex;align-items:center;gap:10px;font-weight:700}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--muted);flex:none}
+.scanning .dot{background:var(--accent);animation:pulse 1.4s infinite}
+.alert .dot{background:var(--warn)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 60%,transparent)}100%{box-shadow:0 0 0 14px transparent}}
+@media (prefers-reduced-motion:reduce){.scanning .dot{animation:none}}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:14px;cursor:pointer;width:100%}
+#toggle{background:var(--accent);color:var(--surface);font-size:17px}
+#toggle.stop{background:var(--ink)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+label.row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:13px}
+#list{display:flex;flex-direction:column;gap:8px;list-style:none;margin:0;padding:0}
+#list li{border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:2px 12px;border:1px solid var(--line)}
+#list li.hit{background:var(--warn-bg);border-color:var(--warn)}
+#list li.maybe{background:var(--maybe-bg);border-color:var(--maybe)}
+#list .name{font-weight:700}
+#list .why{grid-column:1/-1;color:var(--muted);font-size:12px}
+#list .dist{text-align:right}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:12px}
+.note{font-size:13px;color:var(--muted)}
+.note ol{margin:4px 0 0;padding-left:1.3em}
+.note code{font-family:"JetBrains Mono",monospace;background:var(--bg);padding:1px 5px;border-radius:5px;word-break:break-all}
+.err{color:var(--warn);font-size:14px;font-weight:700}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>メガネ探知機</h1>
+    <p class="sub">近くのカメラ付きスマートグラスをBluetoothで探す簡易版（Android Chrome用）</p>
+  </header>
+
+  <section class="panel" id="panel">
+    <div class="status"><span class="dot"></span><span id="statusText">待機中</span></div>
+    <button id="toggle">スキャン開始</button>
+    <label class="row" for="rssi"><span>感度（これより弱い電波は無視）</span><span class="mono" id="rssiVal">-75 dBm</span></label>
+    <input type="range" id="rssi" min="-100" max="-40" step="1" value="-75">
+    <label class="row" for="showAll"><span>メガネ以外の機器も表示（テスト用）</span><input type="checkbox" id="showAll"></label>
+    <p class="err" id="err" hidden></p>
+  </section>
+
+  <section class="panel">
+    <strong>見つかった機器</strong>
+    <ul id="list"></ul>
+    <p class="empty" id="empty">まだ何も見つかってへん</p>
+  </section>
+
+  <section class="panel note">
+    <strong>最初にやること（1回だけ）</strong>
+    <ol>
+      <li>Android の Chrome でアドレス欄に <code>chrome://flags/#enable-experimental-web-platform-features</code> を入れる</li>
+      <li>「Experimental Web Platform features」を <b>Enabled</b> にして再起動</li>
+      <li>スマホの Bluetooth と位置情報をオンにする</li>
+    </ol>
+    <strong>できへんこと</strong>
+    <p style="margin:0">撮影中かどうかは分からへん。画面を閉じると止まる。電源オフや機内モードのメガネは見つからへん。</p>
+  </section>
+</main>
+
+<script>
+// 判定ルール（Nearby Glasses の公開情報を参考）
+const COMPANIES = {
+  0x01AB:{who:"Meta", level:"hit"},
+  0x058E:{who:"Meta Reality Labs", level:"hit"},
+  0x0D53:{who:"Luxottica（Ray-Ban / Oakley）", level:"hit"},
+  0x03C2:{who:"Snap（Spectacles）", level:"hit"},
+  0x05D6:{who:"Jieli（中華系メガネに多いチップ。イヤホン等でも出る）", level:"maybe"}
+};
+const NAME_WORDS = ["rayban","ray-ban","oakley","spectacles","heycyan"];
+const SERVICE_UUID = "7905fff0-b5ce-4e99-a40f-4b1e122d00d0";
+
+const $ = id => document.getElementById(id);
+const devices = new Map();
+let scan = null, wakeLock = null, threshold = -75;
+
+function judge(ev){
+  const reasons = []; let level = null;
+  if (ev.manufacturerData) for (const id of ev.manufacturerData.keys()){
+    const c = COMPANIES[id];
+    if (c){ reasons.push("メーカー番号 0x"+id.toString(16).toUpperCase().padStart(4,"0")+" = "+c.who);
+      if (c.level==="hit" || !level) level = c.level; }
+  }
+  const n = (ev.name||ev.device?.name||"").toLowerCase();
+  if (n && NAME_WORDS.some(w=>n.includes(w))){ reasons.push("名前に「"+n+"」"); level="hit"; }
+  if ((ev.uuids||[]).map(u=>u.toLowerCase()).includes(SERVICE_UUID)){ reasons.push("HeyCyan系メガネの識別子"); level="hit"; }
+  return {level, reasons};
+}
+
+function distance(rssi){
+  if (rssi >= -55) return "すぐ近く";
+  if (rssi >= -70) return "数メートル";
+  return "やや遠い";
+}
+
+function onAd(ev){
+  if (ev.rssi == null || ev.rssi < threshold) return;
+  const {level, reasons} = judge(ev);
+  if (!level && !$("showAll").checked) return;
+  const key = ev.device.id;
+  const isNew = !devices.has(key) && level;
+  devices.set(key,{name:ev.name||ev.device.name||"（名前なし）", rssi:ev.rssi, level, reasons, seen:Date.now()});
+  if (isNew && navigator.vibrate) navigator.vibrate([200,100,200]);
+  render();
+}
+
+function render(){
+  const now = Date.now();
+  for (const [k,d] of devices) if (now - d.seen > 30000) devices.delete(k);
+  const rows = [...devices.values()].sort((a,b)=>(!!b.level-!!a.level)||(b.rssi-a.rssi));
+  $("list").innerHTML = rows.map(d=>`
+    <li class="${d.level||""}">
+      <span class="name">${d.level==="hit"?"⚠ ":""}${esc(d.name)}</span>
+      <span class="dist">${distance(d.rssi)}</span>
+      <span class="why">${d.reasons.length?esc(d.reasons.join(" / ")):"メガネではなさそう"}</span>
+      <span class="mono dist">${d.rssi} dBm</span>
+    </li>`).join("");
+  $("empty").hidden = rows.length>0;
+  const hits = rows.filter(d=>d.level==="hit").length;
+  $("panel").classList.toggle("alert", hits>0);
+  if (scan) $("statusText").textContent = hits ? `カメラ付きメガネっぽいのが ${hits} 台おるで` : "スキャン中…";
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+async function start(){
+  $("err").hidden = true;
+  if (!navigator.bluetooth || !navigator.bluetooth.requestLEScan){
+    showErr("このブラウザは周囲スキャンに未対応や。Android の Chrome で、下の「最初にやること」の設定をしてな。");
+    return;
+  }
+  try{
+    scan = await navigator.bluetooth.requestLEScan({acceptAllAdvertisements:true, keepRepeatedDevices:true});
+    navigator.bluetooth.addEventListener("advertisementreceived", onAd);
+    $("panel").classList.add("scanning");
+    $("toggle").textContent = "スキャン停止"; $("toggle").classList.add("stop");
+    $("statusText").textContent = "スキャン中…";
+    try{ wakeLock = await navigator.wakeLock?.request("screen"); }catch(e){}
+  }catch(e){
+    showErr("開始できへんかった："+e.message+"（Bluetooth・位置情報がオンか、許可を押したか確認してな）");
+    scan = null;
+  }
+}
+function stop(){
+  scan?.stop(); scan = null;
+  navigator.bluetooth?.removeEventListener("advertisementreceived", onAd);
+  wakeLock?.release?.(); wakeLock = null;
+  $("panel").classList.remove("scanning","alert");
+  $("toggle").textContent = "スキャン開始"; $("toggle").classList.remove("stop");
+  $("statusText").textContent = "待機中";
+}
+function showErr(m){ $("err").textContent = m; $("err").hidden = false; }
+
+$("toggle").onclick = () => scan ? stop() : start();
+$("rssi").oninput = e => { threshold = +e.target.value; $("rssiVal").textContent = threshold+" dBm"; };
+setInterval(()=>{ if (scan) render(); }, 3000);
+render();
+</script>
+</body>
+</html>
