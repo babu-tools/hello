@@ -70,7 +70,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   <section class="panel">
     <strong>見つかった機器</strong>
     <ul id="list"></ul>
-    <p class="empty" id="empty">まだ何も見つかってへん</p>
+    <p class="empty" id="empty">まだ何も見つかっていません</p>
   </section>
 
   <section class="panel note">
@@ -80,8 +80,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <li>「Experimental Web Platform features」を <b>Enabled</b> にして再起動</li>
       <li>スマホの Bluetooth と位置情報をオンにする</li>
     </ol>
-    <strong>できへんこと</strong>
-    <p style="margin:0">撮影中かどうかは分からへん。画面を閉じると止まる。電源オフや機内モードのメガネは見つからへん。</p>
+    <strong>できないこと</strong>
+    <p style="margin:0">撮影中かどうかは分かりません。画面を閉じると停止します。電源オフや機内モードのメガネは検知できません。</p>
   </section>
 </main>
 
@@ -145,14 +145,14 @@ function render(){
   $("empty").hidden = rows.length>0;
   const hits = rows.filter(d=>d.level==="hit").length;
   $("panel").classList.toggle("alert", hits>0);
-  if (scan) $("statusText").textContent = hits ? `カメラ付きメガネっぽいのが ${hits} 台おるで` : "スキャン中…";
+  if (scan) $("statusText").textContent = hits ? `カメラ付きメガネの可能性がある機器が ${hits} 台あります` : "スキャン中…";
 }
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
 async function start(){
   $("err").hidden = true;
   if (!navigator.bluetooth || !navigator.bluetooth.requestLEScan){
-    showErr("このブラウザは周囲スキャンに未対応や。Android の Chrome で、下の「最初にやること」の設定をしてな。");
+    showErr("このブラウザは周囲スキャンに対応していません。Android の Chrome で、下の「最初にやること」の設定を行ってください。");
     return;
   }
   try{
@@ -163,7 +163,7 @@ async function start(){
     $("statusText").textContent = "スキャン中…";
     try{ wakeLock = await navigator.wakeLock?.request("screen"); }catch(e){}
   }catch(e){
-    showErr("開始できへんかった："+e.message+"（Bluetooth・位置情報がオンか、許可を押したか確認してな）");
+    showErr("開始できませんでした："+e.message+"（Bluetooth・位置情報がオンになっているか、許可したかを確認してください）");
     scan = null;
   }
 }
