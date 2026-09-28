@@ -9,280 +9,203 @@
 <link rel="apple-touch-icon" href="icon.png">
 <title>検索</title>
 <style>
-  :root {
-    --bg: #0f1419; --panel: #1a2230; --line: #2c3848;
-    --txt: #e6edf3; --sub: #8b98a8; --accent: #4da3ff;
-    --player: #ef4444; --banker: #3b82f6;
-    --warn: #f59e0b; --ok: #22c55e; --remainder: #fbbf24; --cutnum: #f87171;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 20px; background: var(--bg); color: var(--txt);
-    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
-    font-size: 15px; line-height: 1.5;
-  }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .meta { color: var(--sub); font-size: 13px; margin-bottom: 18px; }
-  .meta b { color: var(--txt); }
-  .wrap { max-width: 920px; margin: 0 auto; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .version { color: var(--sub); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .help-btn { background: #364150; padding: 8px 18px; }
-  [hidden] { display: none !important; }
-  #coverView { position: fixed; inset: 0; background: #fff; z-index: 1000; }
-  #hideZone  { position: fixed; top: 0; right: 0; width: 64px; height: 64px;
-               z-index: 1001; background: transparent; }
-  .help-content { line-height: 1.7; }
-  .help-content h2 { font-size: 18px; margin: 0 0 8px; }
-  .help-content h3 { font-size: 15px; margin: 18px 0 6px; color: var(--accent); }
-  .help-content ul { margin: 6px 0; padding-left: 22px; }
-  .help-content li { margin: 5px 0; }
-  .help-content b { color: var(--txt); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
-  .settings { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
-  .setting { display: flex; flex-direction: column; gap: 5px; }
-  .setting label { color: var(--sub); font-size: 13px; font-weight: 600; }
-  .setting input { width: 120px; }
-  /* preset chip on main */
-  .preset-chip { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 12px;
-    background: #0d1620; border: 1px solid var(--accent); border-radius: 10px; color: var(--txt); }
-  .preset-chip-label { font-size: 24px; font-weight: 800; color: var(--accent); line-height: 1; min-width: 22px; text-align: center; }
-  .preset-chip-sub { font-size: 12px; font-weight: 600; color: var(--sub); }
-  /* settings / preset page */
-  .settings-title { font-size: 18px; margin: 0 0 6px; }
-  .settings-lead { margin: 0 0 14px; line-height: 1.6; }
-  .preset-row { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line);
-    border-radius: 10px; margin-bottom: 10px; background: #0d1620; }
-  .preset-row.selected { border-color: var(--accent); background: #11233a; }
-  .preset-pick { flex: 0 0 auto; width: 44px; height: 44px; padding: 0; font-size: 20px; font-weight: 800;
-    background: #1a2230; border: 1px solid var(--line); color: var(--sub); border-radius: 10px; }
-  .preset-row.selected .preset-pick { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .preset-fields { display: flex; gap: 14px; flex: 1 1 auto; flex-wrap: wrap; }
-  .preset-field { display: flex; flex-direction: column; gap: 4px; }
-  .preset-field label { color: var(--sub); font-size: 12px; font-weight: 600; }
-  .preset-field input { width: 110px; }
-  .unit-opts { display: flex; gap: 12px; align-items: center; }
-  .unit-opts label { display: flex; align-items: center; gap: 4px; color: var(--txt);
-    font-size: 14px; font-weight: 600; cursor: pointer; }
-  .unit-opts input { width: auto; }
-  .settings-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); }
-  th { color: var(--sub); font-weight: 600; font-size: 13px; }
-  th:first-child, td:first-child { text-align: center; }
-  input {
-    width: 96px; padding: 7px 9px; background: #0d1620; color: var(--txt);
-    border: 1px solid var(--line); border-radius: 6px; font-size: 15px; text-align: right;
-  }
-  input:focus { outline: none; border-color: var(--accent); }
-  input.bad { border-color: var(--warn); background: #2a1d05; }
-  .col-p { color: var(--player); }
-  .col-b { color: var(--banker); }
-  .cut-head { font-size: 12px; opacity: 0.85; }
-  .cut-cell { font-variant-numeric: tabular-nums; color: var(--sub); font-size: 14px; white-space: nowrap; min-width: 92px; }
-  .cut-cell.has-cut { color: var(--cutnum); font-weight: 700; }
-  .seat-num { cursor: pointer; user-select: none; }
-  .seat-num:active { color: var(--accent); }
-  #clearBtn { margin-left: auto; align-self: flex-end; }
-  button {
-    padding: 10px 22px; font-size: 15px; font-weight: 600; border-radius: 8px;
-    border: none; cursor: pointer; color: #fff;
-  }
-  button.calc { background: var(--accent); }
-  button.clear { background: #364150; }
-  button:active { transform: translateY(1px); }
-  .hint { color: var(--sub); font-size: 13px; }
-  .results { display: grid; grid-template-columns: 1fr; gap: 18px; }
-  .side h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
-  .side-head { display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-bottom: 4px; }
-  .side-head h2 { margin: 0; }
-  .calc-toggle { display: flex; gap: 6px; }
-  .calc-toggle button { padding: 8px 14px; font-size: 13px; font-weight: 700; border-radius: 8px;
-    background: #364150; color: var(--sub); }
-  .calc-toggle button.active { background: var(--accent); color: #fff; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
-  .stat { background:#0d1620; border:1px solid var(--line); border-radius:10px;
-          padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
-  .stat-eff { border-color: var(--ok); }
-  .stat-label { color: var(--sub); font-size:12px; font-weight:600; }
-  .stat-val { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
-  .stat-eff .stat-val { color: var(--ok); }
-  .stat-cut .stat-val { color: var(--cutnum); }
-  .stat-note { font-size:12px; }
-  .stat-note.ok-note { color: var(--ok); }
-  .stat-note.cut-note { color: var(--warn); }
-  .rates { margin-bottom: 12px; }
-  .rate { padding: 8px 0; border-bottom: 1px solid var(--line); }
-  .rate:last-child { border-bottom: none; }
-  .rate-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .rate-main span { color: var(--sub); font-size: 13px; font-weight: 600; }
-  .rate-left { display: inline-flex; align-items: center; gap: 8px; }
-  .rate-main b { font-size: 17px; font-variant-numeric: tabular-nums; }
-  .rate-desc { color: var(--sub); font-size: 11px; margin-top: 2px; }
-  .nocut { color: var(--ok); }
-  .cut { color: var(--warn); }
-  .remainder-box {
-    background: #2a2305; border: 1px solid var(--remainder); border-radius: 8px;
-    padding: 10px 12px; margin: 10px 0; color: var(--remainder); font-size: 13px; font-weight: 600;
-  }
-  .remainder-box div { padding: 2px 0; }
-  .remainder-box b { color: #fff; }
-  .rtable td { font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
-  .rtable th { font-size: 13px; }
-  .rtable td:first-child { font-weight: 600; color: var(--sub); }
-  .rtable tfoot td { font-weight:800; font-size:16px; color:var(--txt);
-    border-top:2px solid var(--accent); border-bottom:none; background:#182230;
-    padding-top:12px; padding-bottom:12px; }
-  .rtable tfoot td:first-child { color: var(--accent); }
-  .rtable tfoot td.cutnum { color: var(--cutnum); }
-  .rtable td.eff-col { color: var(--ok); }
-  .rtable tfoot td.eff-col { color: var(--ok); }
-  .rtable tr.cand td { background: #2a2305; }
-  .sug-cut { color: var(--cutnum); font-weight: 700; margin-right: 6px; }
-  .rtable .rate-col { display: none; }                  /* 既定は非表示 */
-  .rtable.show-rate .rate-col { display: table-cell; }  /* 席列タップで表示 */
-  .rtable td.rate-col { color: var(--cutnum); }
-  .rtable .seat-cell { cursor: pointer; -webkit-tap-highlight-color: rgba(255,255,255,.12); }
-  .guar-mark { color: var(--remainder); font-weight: 800; margin-right: 3px; }
-  .refund { color: var(--cutnum); }
-  .errors { color: var(--warn); font-size: 13px; margin-top: 8px; min-height: 18px; }
-  .empty { color: var(--sub); font-style: italic; }
-  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #364150; color: var(--sub); }
+:root{--bg:#0c1217;--panel:#141e26;--line:#293843;--txt:#edf3f5;--sub:#a2b1bb;--accent:#8be0c6;--warn:#ffd086;--ok:#8be0c6;--remainder:#ffd086;--cutnum:#edf3f5;--banker:#b74f47;color-scheme:dark}
 
-  /* --- narrow / portrait phones --- */
-  @media (max-width: 480px) {
-    body { padding: 10px; font-size: 14px; }
-    .card { padding: 12px; }
-    .settings { gap: 12px; }
-    .setting input { width: 100%; }
-    #inputTable { table-layout: fixed; width: 100%; }
-    #inputTable th:first-child, #inputTable td:first-child { width: 22px; }
-    th, td { padding: 7px 3px; }
-    th { font-size: 11px; }
-    .cut-head { font-size: 10px; }
-    .unit { display: block; font-size: 9px; font-weight: 400; opacity: 0.8; }
-    input { width: 100%; min-width: 0; padding: 8px 5px; font-size: 16px; }
-    .cut-cell { min-width: 0; font-size: 12px; }
-    .rtable th { padding: 7px 3px; font-size: 11px; }
-    .rtable td { padding: 8px 3px; font-size: 15px; font-weight: 700; }
-    .stats { grid-template-columns: 1fr; gap: 8px; }
-    .stat { padding: 10px 12px; flex-direction: row; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; }
-    .stat-label { font-size: 13px; }
-    .stat-val { font-size: 22px; }
-    .stat-note { width: 100%; text-align: right; }
-    .rtable tfoot td { font-size: 15px; }
-    .preset-field input { width: 100%; }
-    .preset-field { flex: 1 1 40%; }
-    .preset-fields { gap: 10px; }
-  }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;padding:28px 24px 60px}
+button,input{font:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:#1c2a34;color:var(--txt);border-radius:10px;min-height:44px;padding:8px 16px;font-weight:650;touch-action:manipulation}
+button:hover{border-color:var(--accent)}
+button:active{transform:translateY(1px)}
+button:focus-visible,summary:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+input{min-width:0;border:1px solid var(--line);border-radius:9px;background:#0d171e;color:var(--txt);padding:10px 12px;font-variant-numeric:tabular-nums}
+input.bad{border-color:var(--warn);background:#3a291b}
+button.calc{background:var(--accent);color:#10251f;border-color:var(--accent)}
+[hidden]{display:none!important}
+.wrap{max-width:1140px;margin:auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+.brand{display:flex;gap:14px;align-items:center}
+.brand-icon{display:grid;place-items:center;width:44px;height:44px;border:1px solid #39534f;border-radius:13px;color:var(--accent);font:700 21px/1 monospace}
+.eyebrow{font-size:10px;letter-spacing:.16em;color:var(--accent);font-weight:750}
+h1{font-size:23px;letter-spacing:-.03em;margin:0;line-height:1.4}
+h2{margin:0;font-size:18px}
+h3{font-size:15px}
+.header-actions{display:flex;gap:8px}
+.version{font-size:11px;color:var(--sub);margin-left:8px;font-weight:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px}
+.toolbar{display:flex;align-items:center;gap:20px;padding:16px 20px;margin-bottom:20px}
+.preset-chip{display:flex;gap:12px;align-items:center;background:transparent}
+.preset-chip-label{display:grid;place-items:center;width:32px;height:32px;background:var(--accent);color:#10251f;border-radius:8px;font-weight:800}
+.preset-chip-sub{font-size:12px;color:var(--sub)}
+.context{display:flex;gap:28px;flex:1}
+.context-item{display:grid;gap:1px}
+.context-item span{color:var(--sub);font-size:11px}
+.context-item b{font-size:20px;font-variant-numeric:tabular-nums}
+.context-item small{font-size:11px;color:var(--sub)}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:20px;align-items:start}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.step{font-size:11px;color:var(--accent);letter-spacing:.09em;margin-bottom:3px}
+.hint,.muted{font-size:12px;color:var(--sub)}
+.hint{margin:6px 0 0}
+.input-actions{display:flex;gap:4px}
+.input-actions button{font-size:12px;padding:7px 10px;background:transparent}
+.mode-area{margin-bottom:20px}
+.calc-toggle{display:flex;background:#0c151b;padding:4px;border-radius:12px;gap:3px;margin-top:12px}
+.calc-toggle button{flex:1;background:transparent;border:0;color:var(--sub);padding:8px 5px;font-size:12px;min-height:38px}
+.calc-toggle button.active{background:#263c39;color:var(--accent)}
+#modeHint{font-size:12px;color:var(--sub);margin:10px 0 0}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:right;border-bottom:1px solid var(--line);padding:9px 6px}
+th{font-size:11px;color:var(--sub);font-weight:500}
+th:first-child,td:first-child{text-align:left}
+#inputTable th:first-child{width:34px}
+#inputTable th:last-child{width:38px}
+#inputTable td:first-child{font:600 13px/1 monospace;color:var(--sub)}
+#inputTable input{width:100%;height:46px;font-size:21px;text-align:right;font-weight:650}
+#inputTable td:nth-child(2){width:54%}
+#inputTable td:nth-child(3){width:29%}
+.unit{display:block;font-size:10px}
+.cut-cell{font-size:19px;font-weight:650;white-space:nowrap;color:#718590}
+.cut-cell.has-cut{color:var(--accent)}
+.seat-clear{border:0;background:transparent;padding:0;width:34px;height:44px;color:var(--sub);font-size:20px}
+.errors{font-size:12px;color:var(--warn)}
+.errors:not(:empty){padding:12px 0}
+.input-foot{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+.input-foot button{font-size:12px}
+.result-card{min-height:380px}
+.empty{padding:46px 10px;text-align:center;color:var(--sub)}
+.empty-icon{display:grid;place-items:center;width:56px;height:56px;border:1px dashed #49606e;border-radius:16px;margin:0 auto 18px;font-size:24px;color:var(--accent)}
+.empty strong{display:block;color:var(--txt);font-size:17px;margin-bottom:8px}
+.empty p{font-size:13px;margin:0}
+.status{border:1px solid #31574c;border-radius:13px;padding:18px;background:#152e27;margin-bottom:18px}
+.status.pending{background:#30271b;border-color:#655135}
+.status.error{background:#352221;border-color:#81534e}
+.status-label{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.07em}
+.pending .status-label{color:var(--warn)}
+.error .status-label{color:#ffb7ae}
+.status h3{font-size:22px;line-height:1.5;margin:6px 0}
+.status p{font-size:12px;margin:4px 0;color:#c0cbc9}
+.plan{border-top:1px solid #655135;padding-top:12px;margin-top:14px}
+.plan-amount{display:flex;align-items:baseline;gap:8px}
+.plan-amount strong{font-size:32px;letter-spacing:-.04em;color:var(--warn)}
+.plan-amount span{font-size:14px}
+.seat-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.seat-chip{border:1px solid #736047;border-radius:6px;padding:2px 7px;font:600 12px/1.6 monospace;color:#ffe7bc}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.stat{padding:14px;background:#0e181f;border-radius:11px;min-width:0}
+.stat-label{display:block;font-size:11px;color:var(--sub)}
+.stat-val{font-size:24px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat-note{font-size:11px;color:var(--sub);display:block}
+.total-line{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}
+.total-line b{font-variant-numeric:tabular-nums;font-size:16px}
+.detail{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+.detail summary{cursor:pointer;min-height:40px;font-size:13px;color:var(--sub)}
+.rtable td{font-size:13px;padding:10px 4px}
+.rtable th{padding:10px 4px}
+.rtable tfoot td{font-weight:750;border-top:2px solid #54746a}
+.refund{color:var(--accent)}
+.guar-mark{font-size:10px;color:var(--warn)}
+.rates{font-size:12px;color:var(--sub);margin-top:12px}
+.preset-row{padding:18px;border:1px solid var(--line);border-radius:13px;margin-bottom:12px;display:flex;gap:18px}
+.preset-row.selected{border-color:var(--accent);background:#1a302d}
+.preset-pick{width:44px;flex-shrink:0;align-self:flex-start}
+.preset-row.selected .preset-pick{color:#10251f;background:var(--accent)}
+.preset-fields{display:flex;gap:18px;flex-wrap:wrap}
+.preset-field{display:grid;gap:6px}
+.preset-field label{font-size:12px;color:var(--sub)}
+.preset-field input{width:140px}
+.unit-opts{display:flex;gap:16px;min-height:44px;align-items:center}
+.unit-opts label{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.preset-field .unit-opts input{width:18px;flex:0 0 18px;height:18px;accent-color:var(--accent)}
+.settings-actions{display:flex;justify-content:flex-end;margin-top:20px}
+.settings-lead{color:var(--sub);font-size:13px}
+.help-content{max-width:750px;margin:auto}
+.help-content p,.help-content li{font-size:14px;color:var(--sub)}
+.help-content h3{color:var(--accent);margin-top:26px}
+.help-content b{color:var(--txt)}
+#coverView{position:fixed;inset:0;background:#fff;z-index:1000}
+#hideZone{position:fixed;right:0;top:0;width:64px;height:64px;z-index:1001;border:0;background:transparent;border-radius:0}
+#hideZone:focus-visible{outline:2px solid #888;outline-offset:-5px}
+body:not(.covered) #hideZone{display:none}
+.footer{font-size:11px;color:#81949f;text-align:center;margin-top:24px}
+.mobile-result{display:none}
+
+@media(max-width:760px){body{padding:16px 12px 32px}
+.topbar{margin-bottom:18px;gap:6px}
+.brand{gap:9px}
+.brand-icon{width:36px;height:36px;font-size:17px}
+h1{font-size:19px}
+.version{font-size:10px}
+.header-actions{gap:5px}
+.header-actions button{font-size:12px;padding:6px 9px}
+.eyebrow{font-size:9px}
+.toolbar{gap:14px;padding:12px;margin-bottom:14px;flex-wrap:wrap}
+.preset-chip{padding:5px 7px;gap:2px;flex-direction:column}
+.preset-chip::after{content:'設定';font-size:10px;color:var(--sub)}
+.preset-chip-sub{display:none}
+.context{gap:18px}
+.context-item b{font-size:18px}
+.context-item small{display:none}
+.workspace{grid-template-columns:1fr;gap:14px}
+.card{padding:18px;border-radius:14px}
+.section-head{margin-bottom:12px}
+#inputTable input{height:44px;font-size:20px}
+#inputTable th,#inputTable td{padding:6px 4px}
+.mobile-result{display:inline-flex}
+.result-card{min-height:0}
+.mode-area{margin-bottom:15px}
+.empty{padding:28px 6px}
+.preset-row{gap:10px;padding:12px}
+.preset-fields{gap:12px;flex:1}
+.preset-field{flex:1;min-width:100px}
+.preset-field input{width:100%}
+.unit-opts{flex-wrap:wrap;gap:8px}
+.stat-val{font-size:23px}
+.status h3{font-size:20px}
+.footer{margin-top:16px}
+}
+
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}
+}
 
 </style>
 </head>
 <body>
-<div id="coverView"></div>
-<div id="hideZone" aria-hidden="true"></div>
+<div id="coverView"></div><button id="hideZone" aria-label="計算画面を表示"></button>
 <div class="wrap">
-  <div class="topbar">
-    <span class="version">GPT版 v1.0</span>
-    <button class="help-btn" id="helpBtn">使い方</button>
+<header class="topbar">
+  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.1</span></h1></div></div>
+  <div class="header-actions"><button id="helpBtn">使い方</button><button id="hideBtn" aria-label="計算画面を隠す">隠す</button></div>
+</header>
+<main id="calcView">
+  <div class="card toolbar">
+    <button id="presetChip" class="preset-chip" title="卓の設定を変更"><span id="presetChipLabel" class="preset-chip-label">A</span><span class="preset-chip-sub">卓の設定<br>変更する ↗</span></button>
+    <div class="context"><div class="context-item"><span>上限ベット</span><b id="limitDisplay">$3,000</b></div><div class="context-item"><span>最低保証 / 人</span><b id="guaranteeDisplay">$300</b></div></div>
+    <input id="limitInput" type="hidden" value="3000"><input id="guaranteeInput" type="hidden" value="300">
   </div>
-
-  <div id="calcView">
-  <div class="card">
-    <div class="settings">
-      <button id="presetChip" class="preset-chip" type="button" title="タップで設定（プリセット切替）">
-        <span class="preset-chip-label" id="presetChipLabel">A</span>
-        <span class="preset-chip-sub">プリセット ▸</span>
-      </button>
-      <input id="limitInput" type="hidden" value="3000">
-      <input id="guaranteeInput" type="hidden" value="300">
-      <button class="clear" id="clearBtn">クリア</button>
-    </div>
-    <table id="inputTable">
-      <thead>
-        <tr>
-          <th>席</th>
-          <th>ベット額<span class="unit"> (1=$100)</span></th>
-          <th class="cut-head">カット数</th>
-        </tr>
-      </thead>
-      <tbody><!-- rows injected --></tbody>
-    </table>
-    <div class="errors" id="errors"></div>
+  <div class="workspace">
+    <section class="card input-card" aria-labelledby="inputHeading">
+      <div class="section-head"><div><div class="step">01 / INPUT</div><h2 id="inputHeading">ベットを入力</h2></div><div class="input-actions"><button id="undoBtn" hidden>元に戻す</button><button id="clearBtn">全てクリア</button></div></div>
+      <table id="inputTable"><thead><tr><th>席</th><th>ベット額<span class="unit">ドルで入力</span></th><th class="cut-head">共通カット</th><th><span class="muted">消去</span></th></tr></thead><tbody></tbody></table>
+      <div class="errors" id="errors" role="alert"></div>
+      <div class="input-foot"><span class="hint" id="inputHint">$10刻み・空欄はベットなし</span><button class="mobile-result" id="resultJump">結果を見る ↓</button></div>
+    </section>
+    <section class="card result-card" id="resultPanel" aria-labelledby="resultHeading" tabindex="-1">
+      <div class="mode-area"><div class="step">02 / RESULT</div><h2 id="resultHeading">カット結果</h2>
+        <div class="calc-toggle" role="group" aria-label="計算方式"><button type="button" data-mode="latest">GPT標準</button><button type="button" data-mode="old">従来方式</button><button type="button" data-mode="fair">$10単位</button></div><p id="modeHint"></p>
+      </div><div id="res"></div>
+    </section>
   </div>
-
-  <div class="results">
-    <div class="card side">
-      <div class="side-head">
-        <h2>カット結果</h2>
-        <div class="calc-toggle">
-          <button type="button" data-mode="latest">GPT版</button>
-          <button type="button" data-mode="old">旧版</button>
-          <button type="button" data-mode="fair">10単位</button>
-        </div>
-      </div>
-      <div id="res"><div class="empty">ベット額を入力すると結果が表示されます。</div></div>
-    </div>
-  </div>
-  </div><!-- /calcView -->
-
-  <div id="helpView" hidden>
-    <div class="card help-content">
-      <h2>使い方</h2>
-
-      <p>このツールは、<b>本来は頭の中で計算してカットする</b>ところを、その<b>答え合わせ</b>に使うためのものです。</p>
-
-      <h3>基本設定</h3>
-      <ul>
-        <li><b>ベット入力</b>：8席。各席に1つのベット額を入力します（空欄＝ベットなし）。<b>入力単位はプリセットごとに設定</b>します（<b>表ヘッダーの換算式を確認</b>してください）。新タイプ＝100ドルを100（例: $460 → 460）、旧タイプ＝100ドルを1（例: $460 → 4.6）。いずれも$10刻みで入力してください。</li>
-        <li><b>プリセット（A〜D）</b>：上限ベットと最低保証の組み合わせを4つ用意しています。メイン左上の<b>記号（例「A」）をタップ</b>すると設定ページが開き、A〜Dを選んで<b>「適用」</b>で切り替えます。各プリセットの上限／保証はそこで編集でき、<b>入力単位</b>も設定ページで切り替え可。選んだ内容は次回起動時も保持されます。</li>
-        <li><b>賭け先ごとの上限ベット</b>：テーブルの上限額。合計がこれを超えるとカット計算が動きます。</li>
-        <li><b>最低ベット保障</b>：カットされても各客に最低限残す額。<br>※最低保証の合計が上限を超える設定にすると、按分できず計算停止になります。</li>
-      </ul>
-
-      <h3>カットのルール</h3>
-      <ul>
-        <li>各席の<b>カット数</b>を<b>$100 単位・四捨五入</b>（ちょうど $50 は切り上げ）で決めます。最低保証で固定された席だけは「ベット − 保障」のカットになります。</li>
-        <li>有効ベット合計が<b>上限を超えることはありません</b>。四捨五入でわずかに足りない場合は、<b>一番大きく賭けた席</b>からカットを $100 ずつ足して上限以下に収めます。</li>
-        <li>それでも上限ちょうどに届かない端数は、<b>$10端数で賭けている席</b>のうち<b>一番大きく賭けた席のカットを $10 単位で戻し、上限ちょうどに自動調整</b>します（1席で足りなければ次に大きい端数席へ繰り越し）。端数席が無い等で埋めきれない分のみ、<b>「上限まで −$X」</b>と表示します。</li>
-      </ul>
-
-      <h3>カット数の見方</h3>
-      <ul>
-        <li>入力欄の右隣に各席の<b>カット数</b>を緑でリアルタイム表示します。</li>
-        <li>「<b>—</b>」はカットなし、またはベットなしです。</li>
-      </ul>
-
-      <h3>入力のコツ</h3>
-      <ul>
-        <li>数値は入力するたびに自動で再計算されます（<b>Enter</b> キーでも計算できます）。</li>
-        <li>「クリア」はベット欄だけを消し、上限・最低保証の設定値は残します。</li>
-        <li><b>席番号をタップ</b>すると、その席のベットだけを消せます。</li>
-      </ul>
-
-      <h3>下の詳細表</h3>
-      <ul>
-        <li>ベット合計・カット率・有効ベット合計、席ごとのベット／有効ベット／カット数を表示します。<br>カット率は<b>全体</b>（カット数合計÷ベット合計）と<b>対象席のみ</b>（保障席を除いた実カット率）の2種を併記します。</li>
-        <li>表の<b>最下行</b>に、ベット合計・有効ベット合計・カット数合計をまとめて表示します。</li>
-        <li>「保障」マークは最低保証で固定された席です。</li>
-      </ul>
-
-    </div>
-  </div>
-
-  <div id="settingsView" hidden>
-    <div class="card">
-      <h2 class="settings-title">設定 / プリセット</h2>
-      <p class="hint settings-lead">使う卓のプリセットを選んで「適用」を押してください。各プリセットの上限／最低保証はここで編集できます（自動保存）。</p>
-      <div id="presetList"><!-- preset rows injected --></div>
-      <div class="errors" id="settingsError"></div>
-      <div class="settings-actions">
-        <button class="calc" id="settingsApply">適用</button>
-      </div>
-    </div>
-  </div>
-
+</main>
+<section id="helpView" hidden><div class="card help-content"><div class="step">GUIDE</div><h2>使い方</h2>
+<h3>1. 卓の設定を確認する</h3><p>上部に上限と最低保証を表示します。A〜Dの設定を使い分けられます。記号を押すと、上限・保証・入力単位を変更できます。</p>
+<h3>2. 席ごとのベットを入力する</h3><p>ドル入力なら $460 は「460」、100ドル換算なら「4.6」です。入力欄の見出しに単位を表示します。空欄と0はベットなし。金額は$10刻みです。</p>
+<h3>3. 共通カットと端数を確認する</h3><p><b>GPT標準</b>は、入力欄の右に共通カットを表示します。同額席に配りきれない分は、黄色い結果欄で<b>候補席・選ぶ人数・追加カット額</b>を案内します。共通カットに追加する金額です。</p><p>例：$400×8席、上限$3,000なら共通カットは$0。8席のうち2人から$100ずつ追加でカットします。誰を選ぶかは現場で判断してください。</p>
+<h3>計算方式の違い</h3><p><b>GPT標準：</b>チップ単位と最低保証を守り、最後の端数を人間が選びます。<br><b>従来方式：</b>四捨五入を基本に、残ったカットを人間が調整します。<br><b>$10単位：</b>$100チップの分割を許し、$10刻みで按分します。同額席の割り切れない分は戻し方を案内します。</p>
+<h3>操作のヒント</h3><p>×で1席を消去。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
+</div></section>
+<section id="settingsView" hidden><div class="card"><div class="step">TABLE SETTINGS</div><h2>卓の設定</h2><p class="settings-lead">A〜Dから使用する設定を選び、「この設定で計算」で反映します。</p><div id="presetList"></div><div id="settingsError" class="errors" role="alert"></div><div class="settings-actions"><button class="calc" id="settingsApply">この設定で計算</button></div></div></section>
+<footer class="footer">GPT版 v1.1 · 入力内容はこの端末で計算します</footer>
 </div>
 
 <script>
@@ -292,25 +215,27 @@ const UNIT100 = 100;     // cut granularity ($100 units)
 let currentBetScale = 1;
 const CALCMODE_KEY = 'cut_gpt_calcmode';
 let calcMode = 'latest';  // 'latest' | 'old'
-let showSeatRate = false;  // 詳細テーブルの個人カット率列の表示状態（保持しない）
+let undoBets = null;
 
 // ---- build input rows ----
 const tbody = document.querySelector('#inputTable tbody');
 for (let s = 1; s <= SEATS; s++) {
   const tr = document.createElement('tr');
   tr.innerHTML =
-    `<td class="seat-num" data-seat="${s}" title="タップでこの席をクリア">${s}</td>` +
-    `<td><input type="number" inputmode="decimal" data-bet data-seat="${s}" min="0" step="0.1" placeholder="-"></td>` +
-    `<td class="cut-cell" data-seat="${s}">—</td>`;
+    `<td>${String(s).padStart(2,'0')}</td>` +
+    `<td><input type="number" inputmode="decimal" data-bet data-seat="${s}" aria-label="席${s}のベット額" enterkeyhint="next" min="0" step="0.1" placeholder="-"></td>` +
+    `<td class="cut-cell" data-seat="${s}">—</td>` +
+    `<td><button type="button" class="seat-clear" data-seat="${s}" aria-label="席${s}をクリア">×</button></td>`;
   tbody.appendChild(tr);
 }
 
-// tap a seat number to clear just that seat
+// clear one seat with its explicit button
 tbody.addEventListener('click', e => {
-  const cell = e.target.closest('.seat-num');
+  const cell = e.target.closest('.seat-clear');
   if (!cell) return;
   const inp = tbody.querySelector(`input[data-bet][data-seat="${cell.dataset.seat}"]`);
   if (inp) { inp.value = ''; inp.classList.remove('bad'); }
+  undoBets = null; document.getElementById('undoBtn').hidden = true;
   calculate();
 });
 
@@ -324,12 +249,15 @@ function readBets() {
   inputs.forEach(inp => {
     inp.classList.remove('bad');
     const raw = inp.value.trim();
+    if (inp.validity.badInput) { errors.push(`席${inp.dataset.seat}: 数値を入力してください`); inp.classList.add('bad'); return; }
     if (raw === '') return;
     const val = Number(raw);
     const seat = Number(inp.dataset.seat);
-    if (!Number.isFinite(val) || val <= 0) { return; }
-    const amt = Math.round(val * currentBetScale);
-    if (amt % INPUT_UNIT !== 0) { errors.push(currentBetScale === 100 ? `席${seat}: ${raw} は0.1単位（=$10）で入力してください` : `席${seat}: ${raw} は10単位（=$10）で入力してください`); inp.classList.add('bad'); return; }
+    if (val === 0) return;
+    if (!Number.isFinite(val) || val < 0) { errors.push(`席${seat}: 0以上の数を入力してください`); inp.classList.add('bad'); return; }
+    const scaled = val * currentBetScale;
+    const amt = Math.round(scaled / INPUT_UNIT) * INPUT_UNIT;
+    if (!Number.isSafeInteger(amt) || Math.abs(scaled - amt) > 0.000001) { errors.push(currentBetScale === 100 ? `席${seat}: ${raw} は0.1単位（=$10）で入力してください` : `席${seat}: ${raw} は10単位（=$10）で入力してください`); inp.classList.add('bad'); return; }
     bets.push({ seat, amount: amt });
   });
   return { bets, errors };
@@ -768,133 +696,36 @@ function computeSideFair(bets, L, GUARANTEE) {
 
 // ---- render result (single pool) ----
 function renderSide(res, L, GUARANTEE) {
-  if (res.state === 'none') {
-    return `<div class="empty">ベットがありません。</div>`;
-  }
-
-  if (res.state === 'overflow') {
-    return `<div class="remainder-box" style="background:#2a0f0f;border-color:var(--banker);color:#fca5a5;">`
-         + `<div>⚠ 計算できません。最低保証の合計 <b>${fmt(res.floorSum)}</b> が上限 <b>${fmt(L)}</b> を超えています。</div>`
-         + `<div>このベット構成では全員に最低保証 ${fmt(GUARANTEE)} を渡すと上限を超えるため按分できません。上限を上げるか最低保証を下げてください。</div>`
-         + `</div>`;
-  }
-
+  if (res.state === 'none') return `<div class="empty"><div class="empty-icon" aria-hidden="true">＋</div><strong>ベットを入れると、ここに結果</strong><p>各席のカットと、最後の端数を<br>リアルタイムに確認できます。</p></div>`;
+  if (res.state === 'overflow') return `<div class="status error"><div class="status-label">設定の確認が必要です</div><h3>最低保証が上限を超えています</h3><p>必要な保証の合計 ${fmt(res.floorSum)} ／ 上限 ${fmt(L)}。卓の設定から上限か最低保証を見直してください。</p></div>`;
+  const plans = res.manualPlan || [];
+  const pending = res.remainder > 0;
+  const tie = res.tieRemainder > 0;
+  const planned = plans.length ? res.manualCutTotal : 0;
+  const final = plans.length ? res.finalEffectiveTotal : res.effectiveTotal;
   let html = '';
-
-  // guarantee-protected seat: effective bet held at its floor (= min(bet, guarantee))
-  const isGuar = r => GUARANTEE > 0 && r.effective === Math.min(r.amount, GUARANTEE);
-
-  // prominent key figures: bet total + effective total
-  const effTotalVal = res.state === 'nocut' ? res.T : res.effectiveTotal;
-  let effNote, effNoteClass;
-  if (res.state === 'nocut') {
-    effNote = `上限 ${fmt(L)} 以内・カットなし`; effNoteClass = 'ok-note';
-  } else if (res.remainder > 0) {
-    effNote = `上限 ${fmt(L)} まで あと ${fmt(res.remainder)} は手動カット`; effNoteClass = 'cut-note';
-  } else if (res.diff > 0) {
-    effNote = `上限 ${fmt(L)} を +${fmt(res.diff)} 超過`; effNoteClass = 'cut-note';
-  } else if (res.diff < 0) {
-    effNote = `上限 ${fmt(L)} まで −${fmt(-res.diff)}`; effNoteClass = 'cut-note';
+  if (plans.length) {
+    html += `<div class="status pending" data-manual-cut><div class="status-label">人間判断 / 追加カットが必要</div><h3>あと ${fmt(res.remainder)} をカット</h3><p>共通カットに加えて、下の候補から選んでください。</p>`;
+    plans.forEach(p => { html += `<div class="plan"><div class="plan-amount"><span>${p.seats.length}人のうち <b>${p.count}人</b>から</span><strong>${fmt(p.add)}</strong><span>ずつ</span></div><div class="seat-chips">${p.seats.map(s=>`<span class="seat-chip">席 ${s}</span>`).join('')}</div></div>`; });
+    html += `<p>追加カット合計 ${fmt(planned)}${final<L ? `。チップ単位などの制約で、調整後は上限より${fmt(L-final)}少なくなります。` : '。指定どおり切ると、上限ちょうどになります。'}</p></div>`;
+  } else if (pending) {
+    html += `<div class="status pending"><div class="status-label">人間判断 / 従来方式</div><h3>あと ${fmt(res.remainder)} をカット</h3><p>表のカットだけでは上限を超えています。</p>`;
+    (res.suggest||[]).forEach(p=>{html+=`<div class="plan">席${p.seat}から <b>${fmt(p.add)}</b> 追加カット</div>`;});
+    const left=res.remainder-(res.suggest||[]).reduce((v,p)=>v+p.add,0);
+    if(left>0)html+=`<p>候補で配り切れない ${fmt(left)} は、別途調整してください。</p>`;
+    html+='</div>';
+  } else if(tie) {
+    html+=`<div class="status pending"><div class="status-label">人間判断 / 戻す席を選択</div><h3>${fmt(res.tieRemainder)} を戻せます</h3><p>同額席は同じカットにしています。上限ちょうどにするなら、席${res.candSeats.join('・席')}のうち${res.tieRemainder/INPUT_UNIT}人に$10ずつ戻してください。</p></div>`;
   } else {
-    effNote = `上限 ${fmt(L)} ちょうど`; effNoteClass = 'ok-note';
+    html+=`<div class="status"><div class="status-label">${res.state==='nocut'?'上限以内':'計算完了'}</div><h3>${res.state==='nocut'?'カットは不要です':res.diff===0?'上限ちょうどです':`上限まで ${fmt(-res.diff)} の余り`}</h3><p>${res.state==='nocut'?'入力したベットをそのまま残せます。':'各席のカット額を確認してください。'}</p></div>`;
   }
-  const cutTotalVal = res.state === 'nocut' ? 0 : res.cutTotal;
-  html += `<div class="stats">`
-        + `<div class="stat"><span class="stat-label">ベット合計</span><span class="stat-val">${fmt(res.T)}</span></div>`
-        + `<div class="stat stat-cut"><span class="stat-label">カット数合計</span><span class="stat-val">${cutTotalVal > 0 ? fmt(cutTotalVal) : '—'}</span></div>`
-        + `<div class="stat stat-eff"><span class="stat-label">${res.manualCutTotal > 0 ? '有効ベット合計（調整前）' : '有効ベット合計'}</span><span class="stat-val">${fmt(effTotalVal)}</span><span class="stat-note ${effNoteClass}">${effNote}</span></div>`
-        + `</div>`;
-
-  if (res.state === 'cut' && res.manualPlan && res.manualPlan.length) {
-    html += `<div class="remainder-box" data-manual-cut>`
-      + `<div><b>未完了：あと ${fmt(res.remainder)} のカットが必要です</b></div>`
-      + `<div>表の金額は共通カット後・端数調整前です。次の候補から人間が選んで追加カットしてください。</div>`
-      + res.manualPlan.map(p => `<div><b>${p.seats.map(s => '席' + s).join('・')}</b> のうち <b>${p.count} 人</b>から <b>${fmt(p.add)} ずつ</b>追加カット</div>`).join('')
-      + `<div>追加カット合計 <b>${fmt(res.manualCutTotal)}</b>。調整後の有効ベット合計は <b>${fmt(res.finalEffectiveTotal)}</b>です。</div>`
-      + (res.finalEffectiveTotal < L ? `<div>チップ単位と逆転防止のため、調整後は上限より ${fmt(L - res.finalEffectiveTotal)} 少なくなります。</div>` : `<div>指定人数・金額で調整すると上限ちょうどになります。</div>`)
-      + `</div>`;
-  }
-  if (res.searchFallback) html += `<div class="remainder-box">通常の探索範囲内に配分が見つからないため、最低保証を残すカットを表示しています。最小カットの保証はありません。</div>`;
-
-  // 旧版のみ: 機械で割り切れない端数を「人間が手でカットする分」として提示する。
-  // GPT版は manualPlan で追加カットを提示するため、この旧版用表示を使わない。
-  if (res.state === 'cut' && res.remainder > 0 && !res.manualPlan) {
-    const sug = res.suggest || [];
-    const sugTotal = sug.reduce((s, x) => s + x.add, 0);
-    let detail;
-    if (sug.length === 0) {
-      detail = `余地のある席から <b>${fmt(res.remainder)}</b> をカット`;
-    } else if (sug.length === 1) {
-      detail = `<b>席${sug[0].seat}</b> から <b>${fmt(sug[0].add)}</b> をカット`;
-    } else if (sug.every(x => x.add === sug[0].add)) {
-      detail = `<b>${sug.map(x => '席' + x.seat).join('・')}</b> へ <b>${fmt(sug[0].add)} ずつ</b>カット`;
-    } else {
-      detail = sug.map(x => `席${x.seat} に <b>${fmt(x.add)}</b>`).join('・') + ' をカット';
-    }
-    // 助言で端数を切り切れない場合は、残りも併記
-    const leftover = res.remainder - sugTotal;
-    html += `<div class="remainder-box">`
-          + `<div>機械で割り切れない端数 <b>${fmt(res.remainder)}</b> が残っています。旧版は<b>最終カットを人間が判断</b>します。</div>`
-          + `<div>おすすめ: ${detail} すると上限 ${fmt(L)} ${leftover > 0 ? `に近づきます（あと ${fmt(leftover)} は別途調整）` : 'ちょうどになります'}。</div>`
-          + `</div>`;
-  }
-
-  // 公平版のみ: 同額ベットで$10単位に割り切れない分は、機械が勝手に振らず人間判断に回す。
-  if (res.state === 'cut' && res.tieRemainder > 0) {
-    const give = res.tieRemainder / INPUT_UNIT;            // $10ずつ戻す席数
-    const seatList = (res.candSeats || []).map(s => '席' + s).join('・');
-    html += `<div class="remainder-box">`
-          + `<div>同額ベットの席があり、$10単位では上限ちょうどに分けきれません。公平のため<b>同額の席は全員同じカット</b>にしています（上限まで <b>${fmt(res.tieRemainder)}</b> 残）。</div>`
-          + `<div>上限ちょうどにしたいときは、<b>${seatList}</b> のうち <b>${give} 席</b>のカットを <b>$10 ずつ戻す</b>かを人間が判断してください。</div>`
-          + `</div>`;
-  }
-
-  if (res.state === 'cut') {
-    html += `<div class="rates">`;
-    // 実績: 実際に切った数字 ÷ ベット
-    const overallRatio = res.cutTotal / res.T;
-    html += `<div class="rate"><div class="rate-main"><span class="rate-left">カット率（全体）</span><b class="cut">${(overallRatio * 100).toFixed(2)}%</b></div>`
-          + `<div class="rate-desc">カット数合計 ÷ ベット合計</div></div>`;
-    // cut-target rate: exclude guarantee-fixed seats from both numerator and denominator
-    const targetBet = res.rows.reduce((s, r) => isGuar(r) ? s : s + r.amount, 0);
-    const targetCut = res.rows.reduce((s, r) => isGuar(r) ? s : s + r.cut, 0);
-    if (targetBet > 0) {
-      const targetRatio = targetCut / targetBet;
-      html += `<div class="rate"><div class="rate-main"><span>カット率（対象席のみ）</span><b class="cut">${(targetRatio * 100).toFixed(2)}%（${(targetRatio * 10).toFixed(1)}割カット）</b></div>`
-            + `<div class="rate-desc">保障席を除いた実カット率</div></div>`;
-    }
-    html += `</div>`;
-  }
-
-  // detail table with totals row
-  html += `<table class="rtable${showSeatRate ? ' show-rate' : ''}"><thead><tr>`
-        + `<th class="seat-cell">席</th><th class="rate-col">率</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
-        + `</tr></thead><tbody>`;
-  const sugMap = {};
-  (res.suggest || []).forEach(s => sugMap[s.seat] = s.add);
-  res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
-    const mark = (res.state === 'cut' && isGuar(r)) ? `<span class="guar-mark">✱</span>` : '';
-    const sugBadge = sugMap[r.seat] ? `<span class="sug-cut">${sugMap[r.seat].toLocaleString('en-US')}</span>` : '';
-    html += `<tr class="${r.cand ? 'cand' : ''}">`
-          + `<td class="seat-cell">${r.seat}</td>`
-          + `<td class="rate-col">${r.amount > 0 && r.cut > 0 ? (r.cut / r.amount * 100).toFixed(1) + '%' : '—'}</td>`
-          + `<td>${fmt(r.amount)}</td>`
-          + `<td class="eff-col">${sugBadge}${mark}${fmt(r.effective)}</td>`
-          + `<td class="refund">${r.cut > 0 ? fmt(r.cut) : '—'}</td>`
-          + `</tr>`;
-  });
-  html += `</tbody>`;
-  const betTotal = res.rows.reduce((s, r) => s + r.amount, 0);
-  const effTotal = res.rows.reduce((s, r) => s + r.effective, 0);
-  const cutTotal = res.rows.reduce((s, r) => s + r.cut, 0);
-  html += `<tfoot><tr>`
-        + `<td class="seat-cell">合計</td>`
-        + `<td class="rate-col">${betTotal > 0 && cutTotal > 0 ? (cutTotal / betTotal * 100).toFixed(1) + '%' : '—'}</td>`
-        + `<td>${fmt(betTotal)}</td>`
-        + `<td class="eff-col">${fmt(effTotal)}</td>`
-        + `<td class="cutnum">${cutTotal > 0 ? fmt(cutTotal) : '—'}</td>`
-        + `</tr></tfoot>`;
-  html += `</table>`;
+  if(res.searchFallback)html+='<div class="status pending"><p>通常の範囲で配分が見つからず、最低保証までのカットを表示しています。最小カットの保証はありません。</p></div>';
+  html+=`<div class="stats"><div class="stat"><span class="stat-label">${pending?'共通カット合計':'カット合計'}</span><b class="stat-val">${fmt(res.cutTotal)}</b><span class="stat-note">${pending?'追加カットを含みません':'各席のカット額の合計'}</span></div><div class="stat"><span class="stat-label">${plans.length?'調整後の有効ベット':pending?'有効ベット（調整前）':'有効ベット'}</span><b class="stat-val">${fmt(final)}</b><span class="stat-note">${plans.length?'追加カットを行った場合':pending?'まだ上限を超えています':`上限 ${fmt(L)}`}</span></div></div>`;
+  html+=`<div class="total-line"><span>ベット合計 / ${res.rows.length}席</span><b>${fmt(res.T)}</b></div>`;
+  if(plans.length) html+=`<div class="total-line"><span>共通＋追加のカット合計</span><b>${fmt(res.cutTotal+planned)}</b></div>`;
+  html+=`<details class="detail"><summary>席ごとの内訳を見る${pending?'（追加カット前）':''}</summary><table class="rtable"><thead><tr><th>席</th><th>ベット</th><th>残る額</th><th>カット</th></tr></thead><tbody>`;
+  res.rows.slice().sort((a,b)=>a.seat-b.seat).forEach(r=>{html+=`<tr><td>${r.seat}</td><td>${fmt(r.amount)}</td><td>${fmt(r.effective)}${GUARANTEE>0&&r.effective===Math.min(r.amount,GUARANTEE)?'<span class="guar-mark"> *</span>':''}</td><td class="refund">${fmt(r.cut)}</td></tr>`;});
+  html+=`</tbody><tfoot><tr><td>計</td><td>${fmt(res.T)}</td><td>${fmt(res.effectiveTotal)}</td><td>${fmt(res.cutTotal)}</td></tr></tfoot></table><div class="rates">${pending?'共通カット率':'カット率'} ${(res.cutTotal/res.T*100).toFixed(2)}% · * 最低保証で保護された席</div></details>`;
   return html;
 }
 
@@ -943,8 +774,8 @@ function calculate() {
   document.getElementById('errors').textContent =
     allErrors.length ? '⚠ ' + allErrors.join(' / ') : '';
 
-  if (s.errors.length) {
-    document.getElementById('res').innerHTML = '<div class="empty">設定値を直してください。</div>';
+  if (allErrors.length) {
+    document.getElementById('res').innerHTML = '<div class="empty">入力に誤りがあります。上のメッセージを確認してください。</div>';
     clearInlineCuts();
     return;
   }
@@ -956,27 +787,25 @@ function calculate() {
 }
 
 function clearAll() {
-  document.querySelectorAll('input[data-bet]').forEach(i => { i.value = ''; i.classList.remove('bad'); });
-  document.getElementById('errors').textContent = '';
-  document.getElementById('res').innerHTML = '<div class="empty">ベット額を入力すると結果が表示されます。</div>';
-  clearInlineCuts();
+  undoBets = Array.from(document.querySelectorAll('input[data-bet]'),i=>i.value);
+  document.querySelectorAll('input[data-bet]').forEach(i=>{i.value='';i.classList.remove('bad');});
+  document.getElementById('undoBtn').hidden = !undoBets.some(Boolean);
+  calculate();
 }
-
-document.getElementById('clearBtn').addEventListener('click', clearAll);
-
-// ===== 詳細テーブル: 席列タップで個人カット率列を表示/非表示 =====
-// #res は再描画されるのでイベント委譲で拾う。率セルは常にDOMにありCSSで隠すだけ→クラス切替で即時。
-document.getElementById('res').addEventListener('click', (e) => {
-  if (!e.target.closest('.seat-cell')) return;
-  showSeatRate = !showSeatRate;
-  const t = document.querySelector('.rtable');
-  if (t) t.classList.toggle('show-rate', showSeatRate);
+document.getElementById('clearBtn').addEventListener('click',clearAll);
+document.getElementById('undoBtn').addEventListener('click',()=>{
+  if(!undoBets)return;
+  document.querySelectorAll('input[data-bet]').forEach((el,i)=>el.value=undoBets[i]);
+  undoBets=null;document.getElementById('undoBtn').hidden=true;calculate();
 });
+document.getElementById('resultJump').addEventListener('click',()=>{document.getElementById('resultPanel').scrollIntoView({block:'start'});document.getElementById('resultPanel').focus({preventScroll:true});});
 
 // ===== 計算モード切替（最新版 / 旧版）=====
 function syncCalcToggle() {
   document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
-    b.classList.toggle('active', b.dataset.mode === calcMode));
+    { b.classList.toggle('active', b.dataset.mode === calcMode); b.setAttribute('aria-pressed', String(b.dataset.mode === calcMode)); });
+  document.getElementById('modeHint').textContent = {latest:'同額席は共通カット。最後の端数は人間が判断。',old:'四捨五入を基本に、残りを手動で調整。',fair:'$100チップの分割を許し、$10刻みで按分。'}[calcMode];
+  document.querySelector('.cut-head').textContent=calcMode==='latest'?'共通カット':'カット額';
 }
 document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
   b.addEventListener('click', () => {
@@ -1005,8 +834,9 @@ helpBtn.addEventListener('click', () => setView(currentView === 'calc' ? 'help' 
 const coverView = document.getElementById('coverView');
 const hideZone  = document.getElementById('hideZone');
 let covered = true;
-function setCovered(v){ covered = v; coverView.toggleAttribute('hidden', !v); }
-hideZone.addEventListener('click', () => setCovered(!covered));
+function setCovered(v){ covered = v; coverView.toggleAttribute('hidden', !v); document.body.classList.toggle('covered',v); document.querySelector('.wrap').inert=v; }
+hideZone.addEventListener('click', () => setCovered(false));
+document.getElementById('hideBtn').addEventListener('click',()=>setCovered(true));
 
 // ===== presets (上限/保証) =====
 const DEFAULT_PRESETS = [
@@ -1055,13 +885,16 @@ function applyActive() {
   document.getElementById('limitInput').value = String(presets[activeIdx].limit);
   document.getElementById('guaranteeInput').value = String(presets[activeIdx].guar);
   document.getElementById('presetChipLabel').textContent = presets[activeIdx].label;
+  document.getElementById('limitDisplay').textContent=fmt(presets[activeIdx].limit);
+  document.getElementById('guaranteeDisplay').textContent=fmt(presets[activeIdx].guar);
   currentBetScale = presets[activeIdx].scale;
+  undoBets=null;document.getElementById('undoBtn').hidden=true;
   document.querySelectorAll('input[data-bet]').forEach(inp => {
     inp.step = currentBetScale === 100 ? '0.1' : '10';
     inp.setAttribute('inputmode', currentBetScale === 100 ? 'decimal' : 'numeric');
   });
   const unitLabel = document.querySelector('#inputTable thead .unit');
-  if (unitLabel) unitLabel.textContent = currentBetScale === 100 ? ' (1=$100)' : ' (100=$100)';
+  if (unitLabel) unitLabel.textContent = currentBetScale === 100 ? '1 = $100（例: 4.6）' : 'ドルで入力（例: 460）';
   calculate();
 }
 
@@ -1073,9 +906,9 @@ function renderSettings() {
     + `<button type="button" class="preset-pick" data-idx="${i}">${p.label}</button>`
     + `<div class="preset-fields">`
     + `<div class="preset-field"><label>上限 ($)</label>`
-    + `<input class="p-limit" data-idx="${i}" type="number" inputmode="numeric" min="10" step="10" value="${p.limit}"></div>`
+    + `<input class="p-limit" aria-label="${p.label}の上限" data-idx="${i}" type="number" inputmode="numeric" min="10" step="10" value="${p.limit}"></div>`
     + `<div class="preset-field"><label>最低保証 ($/100刻み)</label>`
-    + `<input class="p-guar" data-idx="${i}" type="number" inputmode="numeric" min="0" step="100" value="${p.guar}"></div>`
+    + `<input class="p-guar" aria-label="${p.label}の最低保証" data-idx="${i}" type="number" inputmode="numeric" min="0" step="100" value="${p.guar}"></div>`
     + `<div class="preset-field"><label>入力単位</label>`
     + `<div class="unit-opts">`
     + `<label><input class="p-unit" type="radio" name="unit-${i}" data-idx="${i}" value="100"${p.scale === 100 ? ' checked' : ''}>1 = $100</label>`
@@ -1129,11 +962,11 @@ document.getElementById('settingsApply').addEventListener('click', () => {
 });
 
 // real-time recompute while typing in the calculator only
-document.querySelectorAll('#calcView input').forEach(i => i.addEventListener('input', calculate));
+document.querySelectorAll('#calcView input').forEach(i => i.addEventListener('input', () => {undoBets=null;document.getElementById('undoBtn').hidden=true;calculate();}));
 // Enter: calculate in calc view
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  if (currentView === 'calc' && e.target.matches('input[data-bet]')) calculate();
+  if (currentView === 'calc' && e.target.matches('input[data-bet]')) { e.preventDefault(); calculate(); const next=e.target.closest('tr').nextElementSibling; if(next) next.querySelector('input').focus(); else e.target.blur(); }
 });
 
 // ===== init: restore presets & active selection, then apply =====
