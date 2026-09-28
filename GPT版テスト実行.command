@@ -29,6 +29,9 @@ if [ $? -ne 0 ]; then RESULT=1; fi
 "$JSC" tests/gpt/manual-cut.test.js -- "$APP"
 if [ $? -ne 0 ]; then RESULT=1; fi
 
+"$JSC" tests/gpt/high-bet.test.js -- "$APP"
+if [ $? -ne 0 ]; then RESULT=1; fi
+
 echo ""
 if [ $RESULT -eq 0 ]; then
   echo "（テスト成功。アプリの計算は今まで通り正しく動いています）"
