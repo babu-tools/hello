@@ -58,16 +58,17 @@ table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{text-align:right;border-bottom:1px solid var(--line);padding:9px 6px}
 th{font-size:11px;color:var(--sub);font-weight:500}
 th:first-child,td:first-child{text-align:left}
-#inputTable th:first-child{width:34px}
-#inputTable th:last-child{width:38px}
+#inputTable th:first-child{width:44px}
 #inputTable td:first-child{font:600 13px/1 monospace;color:var(--sub)}
 #inputTable input{width:100%;height:46px;font-size:21px;text-align:right;font-weight:650}
-#inputTable td:nth-child(2){width:54%}
-#inputTable td:nth-child(3){width:29%}
+#inputTable td:nth-child(2){width:60%}
+#inputTable td:nth-child(3){width:30%}
 .unit{display:block;font-size:10px}
 .cut-cell{font-size:19px;font-weight:650;white-space:nowrap;color:#718590}
 .cut-cell.has-cut{color:var(--cutnum)}
-.seat-clear{border:0;background:transparent;padding:0;width:34px;height:44px;color:var(--sub);font-size:20px}
+.seat-num{border:0;background:transparent;padding:0;min-width:36px;min-height:44px;color:var(--sub);font:600 13px/1 monospace}
+.input-total{font-size:24px;font-variant-numeric:tabular-nums}
+.input-actions{flex-wrap:wrap;justify-content:flex-end}
 .errors{font-size:12px;color:var(--warn)}
 .errors:not(:empty){padding:12px 0}
 .input-foot{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
@@ -180,7 +181,7 @@ h1{font-size:19px}
 <div id="coverView"></div><button id="hideZone" aria-label="計算画面を表示"></button>
 <div class="wrap">
 <header class="topbar">
-  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.3</span></h1></div></div>
+  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.4</span></h1></div></div>
   <div class="header-actions"><button id="helpBtn">使い方</button><button id="hideBtn" aria-label="計算画面を隠す">隠す</button></div>
 </header>
 <main id="calcView">
@@ -191,8 +192,8 @@ h1{font-size:19px}
   </div>
   <div class="workspace">
     <section class="card input-card" aria-labelledby="inputHeading">
-      <div class="section-head"><div><div class="step">01 / INPUT</div><h2 id="inputHeading">ベットを入力</h2></div><div class="input-actions"><button id="undoBtn" hidden>元に戻す</button><button id="clearBtn">全てクリア</button></div></div>
-      <table id="inputTable"><thead><tr><th>席</th><th>ベット額<span class="unit">ドルで入力</span></th><th class="cut-head">共通カット</th><th><span class="muted">消去</span></th></tr></thead><tbody></tbody></table>
+      <div class="section-head"><div><div class="step">01 / INPUT</div><h2 id="inputHeading"><span class="muted">ベット合計</span><br><span id="inputTotal" class="input-total">$0</span></h2></div><div class="input-actions"><button id="undoBtn" hidden>元に戻す</button><button id="clearBtn">全てクリア</button></div></div>
+      <table id="inputTable"><thead><tr><th>席</th><th>ベット額<span class="unit">ドルで入力</span></th><th class="cut-head">共通カット</th></tr></thead><tbody></tbody></table>
       <div class="errors" id="errors" role="alert"></div>
       <div class="input-foot"><span class="hint" id="inputHint">$10刻み・空欄はベットなし</span><button class="mobile-result" id="resultJump">結果を見る ↓</button></div>
     </section>
@@ -208,10 +209,10 @@ h1{font-size:19px}
 <h3>2. 席ごとのベットを入力する</h3><p>ドル入力なら $460 は「460」、100ドル換算なら「4.6」です。入力欄の見出しに単位を表示します。空欄と0はベットなし。金額は$10刻みです。</p>
 <h3>3. 共通カットと端数を確認する</h3><p><b>高額配慮・比例配分</b>は、入力欄の右に共通カットを表示します。同額席に配りきれない分は、黄色い結果欄で<b>候補席・選ぶ人数・追加カット額</b>を案内します。共通カットに追加する金額です。</p><p>例：$400×8席、上限$3,000なら共通カットは$0。8席のうち2人から$100ずつ追加でカットします。誰を選ぶかは現場で判断してください。</p>
 <h3>計算方式の違い</h3><p><b>高額配慮：</b>ベットの中央値（2席だけの場合は低い方）の2倍を超える高額席は、超えた部分に応じて負担を徐々に増やします。最低保証・同額席の公平さ・残額の逆転防止を守ります。<br><b>比例配分：</b>これまでのGPT標準です。チップ単位と最低保証を守り、最後の端数を人間が選びます。<br><b>従来方式：</b>四捨五入を基本に、残ったカットを人間が調整します。<br><b>$10単位：</b>$100チップの分割を許し、$10刻みで按分します。同額席の割り切れない分は戻し方を案内します。</p>
-<h3>操作のヒント</h3><p>×で1席を消去。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。カット額はやわらかい赤、残る額は青です。席番号をタップすると、個別のカット率（カット額÷元のベット額、小数1桁）を表示・非表示にできます。追加カット前の割合です。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
+<h3>操作のヒント</h3><p>入力表の席番号をタップすると、その席を消去できます。上部のベット合計は入力・消去に合わせて更新されます。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。カット額はやわらかい赤、残る額は青です。席番号をタップすると、個別のカット率（カット額÷元のベット額、小数1桁）を表示・非表示にできます。追加カット前の割合です。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
 </div></section>
 <section id="settingsView" hidden><div class="card"><div class="step">TABLE SETTINGS</div><h2>卓の設定</h2><p class="settings-lead">A〜Dから使用する設定を選び、「この設定で計算」で反映します。</p><div id="presetList"></div><div id="settingsError" class="errors" role="alert"></div><div class="settings-actions"><button class="calc" id="settingsApply">この設定で計算</button></div></div></section>
-<footer class="footer">GPT版 v1.3 · 入力内容はこの端末で計算します</footer>
+<footer class="footer">GPT版 v1.4 · 入力内容はこの端末で計算します</footer>
 </div>
 
 <script>
@@ -229,16 +230,15 @@ const tbody = document.querySelector('#inputTable tbody');
 for (let s = 1; s <= SEATS; s++) {
   const tr = document.createElement('tr');
   tr.innerHTML =
-    `<td>${String(s).padStart(2,'0')}</td>` +
+    `<td><button type="button" class="seat-num" data-seat="${s}" aria-label="席${s}をクリア" title="タップでこの席をクリア">${String(s).padStart(2,'0')}</button></td>` +
     `<td><input type="number" inputmode="decimal" data-bet data-seat="${s}" aria-label="席${s}のベット額" enterkeyhint="next" min="0" step="0.1" placeholder="-"></td>` +
-    `<td class="cut-cell" data-seat="${s}">—</td>` +
-    `<td><button type="button" class="seat-clear" data-seat="${s}" aria-label="席${s}をクリア">×</button></td>`;
+    `<td class="cut-cell" data-seat="${s}">—</td>`;
   tbody.appendChild(tr);
 }
 
-// clear one seat with its explicit button
+// Claude版と同じく、入力表の席番号タップでその席をクリア
 tbody.addEventListener('click', e => {
-  const cell = e.target.closest('.seat-clear');
+  const cell = e.target.closest('.seat-num');
   if (!cell) return;
   const inp = tbody.querySelector(`input[data-bet][data-seat="${cell.dataset.seat}"]`);
   if (inp) { inp.value = ''; inp.classList.remove('bad'); }
@@ -809,6 +809,7 @@ function clearInlineCuts() {
 function calculate() {
   const s = readSettings();
   const b = readBets();
+  document.getElementById('inputTotal').textContent = b.errors.length ? '入力を確認' : fmt(b.bets.reduce((sum,bet) => sum + bet.amount, 0));
   const allErrors = [...s.errors, ...b.errors];
   document.getElementById('errors').textContent =
     allErrors.length ? '⚠ ' + allErrors.join(' / ') : '';
