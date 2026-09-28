@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="検索">
+<link rel="apple-touch-icon" href="icon.png">
+<title>検索</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2230; --line: #2c3848;
+    --txt: #e6edf3; --sub: #8b98a8; --accent: #4da3ff;
+    --player: #ef4444; --banker: #3b82f6;
+    --warn: #f59e0b; --ok: #22c55e; --remainder: #fbbf24; --cutnum: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: var(--sub); font-size: 13px; margin-bottom: 18px; }
+  .meta b { color: var(--txt); }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .version { color: var(--sub); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .help-btn { background: #364150; padding: 8px 18px; }
+  [hidden] { display: none !important; }
+  #coverView { position: fixed; inset: 0; background: #fff; z-index: 1000; }
+  #hideZone  { position: fixed; top: 0; right: 0; width: 64px; height: 64px;
+               z-index: 1001; background: transparent; }
+  .help-content { line-height: 1.7; }
+  .help-content h2 { font-size: 18px; margin: 0 0 8px; }
+  .help-content h3 { font-size: 15px; margin: 18px 0 6px; color: var(--accent); }
+  .help-content ul { margin: 6px 0; padding-left: 22px; }
+  .help-content li { margin: 5px 0; }
+  .help-content b { color: var(--txt); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+  .settings { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .setting { display: flex; flex-direction: column; gap: 5px; }
+  .setting label { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .setting input { width: 120px; }
+  /* preset chip on main */
+  .preset-chip { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 12px;
+    background: #0d1620; border: 1px solid var(--accent); border-radius: 10px; color: var(--txt); }
+  .preset-chip-label { font-size: 24px; font-weight: 800; color: var(--accent); line-height: 1; min-width: 22px; text-align: center; }
+  .preset-chip-sub { font-size: 12px; font-weight: 600; color: var(--sub); }
+  /* settings / preset page */
+  .settings-title { font-size: 18px; margin: 0 0 6px; }
+  .settings-lead { margin: 0 0 14px; line-height: 1.6; }
+  .preset-row { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line);
+    border-radius: 10px; margin-bottom: 10px; background: #0d1620; }
+  .preset-row.selected { border-color: var(--accent); background: #11233a; }
+  .preset-pick { flex: 0 0 auto; width: 44px; height: 44px; padding: 0; font-size: 20px; font-weight: 800;
+    background: #1a2230; border: 1px solid var(--line); color: var(--sub); border-radius: 10px; }
+  .preset-row.selected .preset-pick { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .preset-fields { display: flex; gap: 14px; flex: 1 1 auto; flex-wrap: wrap; }
+  .preset-field { display: flex; flex-direction: column; gap: 4px; }
+  .preset-field label { color: var(--sub); font-size: 12px; font-weight: 600; }
+  .preset-field input { width: 110px; }
+  .unit-opts { display: flex; gap: 12px; align-items: center; }
+  .unit-opts label { display: flex; align-items: center; gap: 4px; color: var(--txt);
+    font-size: 14px; font-weight: 600; cursor: pointer; }
+  .unit-opts input { width: auto; }
+  .settings-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+  th { color: var(--sub); font-weight: 600; font-size: 13px; }
+  th:first-child, td:first-child { text-align: center; }
+  input {
+    width: 96px; padding: 7px 9px; background: #0d1620; color: var(--txt);
+    border: 1px solid var(--line); border-radius: 6px; font-size: 15px; text-align: right;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  input.bad { border-color: var(--warn); background: #2a1d05; }
+  .col-p { color: var(--player); }
+  .col-b { color: var(--banker); }
+  .cut-head { font-size: 12px; opacity: 0.85; }
+  .cut-cell { font-variant-numeric: tabular-nums; color: var(--sub); font-size: 14px; white-space: nowrap; min-width: 92px; }
+  .cut-cell.has-cut { color: var(--cutnum); font-weight: 700; }
+  .seat-num { cursor: pointer; user-select: none; }
+  .seat-num:active { color: var(--accent); }
+  #clearBtn { margin-left: auto; align-self: flex-end; }
+  button {
+    padding: 10px 22px; font-size: 15px; font-weight: 600; border-radius: 8px;
+    border: none; cursor: pointer; color: #fff;
+  }
+  button.calc { background: var(--accent); }
+  button.clear { background: #364150; }
+  button:active { transform: translateY(1px); }
+  .hint { color: var(--sub); font-size: 13px; }
+  .results { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .side h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .side-head { display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-bottom: 4px; }
+  .side-head h2 { margin: 0; }
+  .calc-toggle { display: flex; gap: 6px; }
+  .calc-toggle button { padding: 8px 14px; font-size: 13px; font-weight: 700; border-radius: 8px;
+    background: #364150; color: var(--sub); }
+  .calc-toggle button.active { background: var(--accent); color: #fff; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+  .stat { background:#0d1620; border:1px solid var(--line); border-radius:10px;
+          padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+  .stat-eff { border-color: var(--ok); }
+  .stat-label { color: var(--sub); font-size:12px; font-weight:600; }
+  .stat-val { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; }
+  .stat-eff .stat-val { color: var(--ok); }
+  .stat-cut .stat-val { color: var(--cutnum); }
+  .stat-note { font-size:12px; }
+  .stat-note.ok-note { color: var(--ok); }
+  .stat-note.cut-note { color: var(--warn); }
+  .rates { margin-bottom: 12px; }
+  .rate { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .rate:last-child { border-bottom: none; }
+  .rate-main { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .rate-main span { color: var(--sub); font-size: 13px; font-weight: 600; }
+  .rate-left { display: inline-flex; align-items: center; gap: 8px; }
+  .rate-main b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .rate-desc { color: var(--sub); font-size: 11px; margin-top: 2px; }
+  .nocut { color: var(--ok); }
+  .cut { color: var(--warn); }
+  .remainder-box {
+    background: #2a2305; border: 1px solid var(--remainder); border-radius: 8px;
+    padding: 10px 12px; margin: 10px 0; color: var(--remainder); font-size: 13px; font-weight: 600;
+  }
+  .remainder-box div { padding: 2px 0; }
+  .remainder-box b { color: #fff; }
+  .rtable td { font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
+  .rtable th { font-size: 13px; }
+  .rtable td:first-child { font-weight: 600; color: var(--sub); }
+  .rtable tfoot td { font-weight:800; font-size:16px; color:var(--txt);
+    border-top:2px solid var(--accent); border-bottom:none; background:#182230;
+    padding-top:12px; padding-bottom:12px; }
+  .rtable tfoot td:first-child { color: var(--accent); }
+  .rtable tfoot td.cutnum { color: var(--cutnum); }
+  .rtable td.eff-col { color: var(--ok); }
+  .rtable tfoot td.eff-col { color: var(--ok); }
+  .rtable tr.cand td { background: #2a2305; }
+  .sug-cut { color: var(--cutnum); font-weight: 700; margin-right: 6px; }
+  .rtable .rate-col { display: none; }                  /* 既定は非表示 */
+  .rtable.show-rate .rate-col { display: table-cell; }  /* 席列タップで表示 */
+  .rtable td.rate-col { color: var(--cutnum); }
+  .rtable .seat-cell { cursor: pointer; -webkit-tap-highlight-color: rgba(255,255,255,.12); }
+  .guar-mark { color: var(--remainder); font-weight: 800; margin-right: 3px; }
+  .refund { color: var(--cutnum); }
+  .errors { color: var(--warn); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .empty { color: var(--sub); font-style: italic; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #364150; color: var(--sub); }
+
+  /* --- narrow / portrait phones --- */
+  @media (max-width: 480px) {
+    body { padding: 10px; font-size: 14px; }
+    .card { padding: 12px; }
+    .settings { gap: 12px; }
+    .setting input { width: 100%; }
+    #inputTable { table-layout: fixed; width: 100%; }
+    #inputTable th:first-child, #inputTable td:first-child { width: 22px; }
+    th, td { padding: 7px 3px; }
+    th { font-size: 11px; }
+    .cut-head { font-size: 10px; }
+    .unit { display: block; font-size: 9px; font-weight: 400; opacity: 0.8; }
+    input { width: 100%; min-width: 0; padding: 8px 5px; font-size: 16px; }
+    .cut-cell { min-width: 0; font-size: 12px; }
+    .rtable th { padding: 7px 3px; font-size: 11px; }
+    .rtable td { padding: 8px 3px; font-size: 15px; font-weight: 700; }
+    .stats { grid-template-columns: 1fr; gap: 8px; }
+    .stat { padding: 10px 12px; flex-direction: row; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; }
+    .stat-label { font-size: 13px; }
+    .stat-val { font-size: 22px; }
+    .stat-note { width: 100%; text-align: right; }
+    .rtable tfoot td { font-size: 15px; }
+    .preset-field input { width: 100%; }
+    .preset-field { flex: 1 1 40%; }
+    .preset-fields { gap: 10px; }
+  }
+
+</style>
+</head>
+<body>
+<div id="coverView"></div>
+<div id="hideZone" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="topbar">
+    <span class="version">GPT版 v1.0</span>
+    <button class="help-btn" id="helpBtn">使い方</button>
+  </div>
+
+  <div id="calcView">
+  <div class="card">
+    <div class="settings">
+      <button id="presetChip" class="preset-chip" type="button" title="タップで設定（プリセット切替）">
+        <span class="preset-chip-label" id="presetChipLabel">A</span>
+        <span class="preset-chip-sub">プリセット ▸</span>
+      </button>
+      <input id="limitInput" type="hidden" value="3000">
+      <input id="guaranteeInput" type="hidden" value="300">
+      <button class="clear" id="clearBtn">クリア</button>
+    </div>
+    <table id="inputTable">
+      <thead>
+        <tr>
+          <th>席</th>
+          <th>ベット額<span class="unit"> (1=$100)</span></th>
+          <th class="cut-head">カット数</th>
+        </tr>
+      </thead>
+      <tbody><!-- rows injected --></tbody>
+    </table>
+    <div class="errors" id="errors"></div>
+  </div>
+
+  <div class="results">
+    <div class="card side">
+      <div class="side-head">
+        <h2>カット結果</h2>
+        <div class="calc-toggle">
+          <button type="button" data-mode="latest">GPT版</button>
+          <button type="button" data-mode="old">旧版</button>
+          <button type="button" data-mode="fair">10単位</button>
+        </div>
+      </div>
+      <div id="res"><div class="empty">ベット額を入力すると結果が表示されます。</div></div>
+    </div>
+  </div>
+  </div><!-- /calcView -->
+
+  <div id="helpView" hidden>
+    <div class="card help-content">
+      <h2>使い方</h2>
+
+      <p>このツールは、<b>本来は頭の中で計算してカットする</b>ところを、その<b>答え合わせ</b>に使うためのものです。</p>
+
+      <h3>基本設定</h3>
+      <ul>
+        <li><b>ベット入力</b>：8席。各席に1つのベット額を入力します（空欄＝ベットなし）。<b>入力単位はプリセットごとに設定</b>します（<b>表ヘッダーの換算式を確認</b>してください）。新タイプ＝100ドルを100（例: $460 → 460）、旧タイプ＝100ドルを1（例: $460 → 4.6）。いずれも$10刻みで入力してください。</li>
+        <li><b>プリセット（A〜D）</b>：上限ベットと最低保証の組み合わせを4つ用意しています。メイン左上の<b>記号（例「A」）をタップ</b>すると設定ページが開き、A〜Dを選んで<b>「適用」</b>で切り替えます。各プリセットの上限／保証はそこで編集でき、<b>入力単位</b>も設定ページで切り替え可。選んだ内容は次回起動時も保持されます。</li>
+        <li><b>賭け先ごとの上限ベット</b>：テーブルの上限額。合計がこれを超えるとカット計算が動きます。</li>
+        <li><b>最低ベット保障</b>：カットされても各客に最低限残す額。<br>※最低保証の合計が上限を超える設定にすると、按分できず計算停止になります。</li>
+      </ul>
+
+      <h3>カットのルール</h3>
+      <ul>
+        <li>各席の<b>カット数</b>を<b>$100 単位・四捨五入</b>（ちょうど $50 は切り上げ）で決めます。最低保証で固定された席だけは「ベット − 保障」のカットになります。</li>
+        <li>有効ベット合計が<b>上限を超えることはありません</b>。四捨五入でわずかに足りない場合は、<b>一番大きく賭けた席</b>からカットを $100 ずつ足して上限以下に収めます。</li>
+        <li>それでも上限ちょうどに届かない端数は、<b>$10端数で賭けている席</b>のうち<b>一番大きく賭けた席のカットを $10 単位で戻し、上限ちょうどに自動調整</b>します（1席で足りなければ次に大きい端数席へ繰り越し）。端数席が無い等で埋めきれない分のみ、<b>「上限まで −$X」</b>と表示します。</li>
+      </ul>
+
+      <h3>カット数の見方</h3>
+      <ul>
+        <li>入力欄の右隣に各席の<b>カット数</b>を緑でリアルタイム表示します。</li>
+        <li>「<b>—</b>」はカットなし、またはベットなしです。</li>
+      </ul>
+
+      <h3>入力のコツ</h3>
+      <ul>
+        <li>数値は入力するたびに自動で再計算されます（<b>Enter</b> キーでも計算できます）。</li>
+        <li>「クリア」はベット欄だけを消し、上限・最低保証の設定値は残します。</li>
+        <li><b>席番号をタップ</b>すると、その席のベットだけを消せます。</li>
+      </ul>
+
+      <h3>下の詳細表</h3>
+      <ul>
+        <li>ベット合計・カット率・有効ベット合計、席ごとのベット／有効ベット／カット数を表示します。<br>カット率は<b>全体</b>（カット数合計÷ベット合計）と<b>対象席のみ</b>（保障席を除いた実カット率）の2種を併記します。</li>
+        <li>表の<b>最下行</b>に、ベット合計・有効ベット合計・カット数合計をまとめて表示します。</li>
+        <li>「保障」マークは最低保証で固定された席です。</li>
+      </ul>
+
+    </div>
+  </div>
+
+  <div id="settingsView" hidden>
+    <div class="card">
+      <h2 class="settings-title">設定 / プリセット</h2>
+      <p class="hint settings-lead">使う卓のプリセットを選んで「適用」を押してください。各プリセットの上限／最低保証はここで編集できます（自動保存）。</p>
+      <div id="presetList"><!-- preset rows injected --></div>
+      <div class="errors" id="settingsError"></div>
+      <div class="settings-actions">
+        <button class="calc" id="settingsApply">適用</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SEATS = 8;
+const INPUT_UNIT = 10;   // bets are computed in $10 steps (dollars)
+const UNIT100 = 100;     // cut granularity ($100 units)
+let currentBetScale = 1;
+const CALCMODE_KEY = 'cut_gpt_calcmode';
+let calcMode = 'latest';  // 'latest' | 'old'
+let showSeatRate = false;  // 詳細テーブルの個人カット率列の表示状態（保持しない）
+
+// ---- build input rows ----
+const tbody = document.querySelector('#inputTable tbody');
+for (let s = 1; s <= SEATS; s++) {
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td class="seat-num" data-seat="${s}" title="タップでこの席をクリア">${s}</td>` +
+    `<td><input type="number" inputmode="decimal" data-bet data-seat="${s}" min="0" step="0.1" placeholder="-"></td>` +
+    `<td class="cut-cell" data-seat="${s}">—</td>`;
+  tbody.appendChild(tr);
+}
+
+// tap a seat number to clear just that seat
+tbody.addEventListener('click', e => {
+  const cell = e.target.closest('.seat-num');
+  if (!cell) return;
+  const inp = tbody.querySelector(`input[data-bet][data-seat="${cell.dataset.seat}"]`);
+  if (inp) { inp.value = ''; inp.classList.remove('bad'); }
+  calculate();
+});
+
+const fmt = n => '$' + n.toLocaleString('en-US');
+
+// ---- validation ----
+function readBets() {
+  const inputs = document.querySelectorAll('input[data-bet]');
+  const bets = [];
+  const errors = [];
+  inputs.forEach(inp => {
+    inp.classList.remove('bad');
+    const raw = inp.value.trim();
+    if (raw === '') return;
+    const val = Number(raw);
+    const seat = Number(inp.dataset.seat);
+    if (!Number.isFinite(val) || val <= 0) { return; }
+    const amt = Math.round(val * currentBetScale);
+    if (amt % INPUT_UNIT !== 0) { errors.push(currentBetScale === 100 ? `席${seat}: ${raw} は0.1単位（=$10）で入力してください` : `席${seat}: ${raw} は10単位（=$10）で入力してください`); inp.classList.add('bad'); return; }
+    bets.push({ seat, amount: amt });
+  });
+  return { bets, errors };
+}
+
+const roundUnit = (x, u) => Math.round(x / u) * u;
+
+// ---- core computation (single pool) ----
+function computeSide(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  // iterative constrained pro-rata with minimum guarantee floor -> rawEff (sums to L)
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  // overflow guard: if guaranteed floors alone exceed the limit, the cut is impossible
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  let active = bets.slice();
+  const fixedSeats = new Set();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+      fixedSeats.add(b.seat);
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // 同額グループごとに計算。最終端数だけ、差が$100以内のチップ合法な2額を許す。
+  // 同額内の誰に追加カットを振るかは確定せず、人数と候補席を返す。
+  // 異額グループ間は最小/最大の両端で比較し、どの候補を選んでも逆転させない。
+  const grouped = new Map();
+  bets.slice().sort((a, b) => a.amount - b.amount || a.seat - b.seat).forEach(b => {
+    if (!grouped.has(b.amount)) grouped.set(b.amount, []);
+    grouped.get(b.amount).push(b.seat);
+  });
+  const groups = Array.from(grouped, ([amount, seats]) => {
+    const ideal = (amount - rawEff[seats[0]]) / INPUT_UNIT;
+    const max = (amount - Math.min(amount, GUARANTEE)) / INPUT_UNIT;
+    const legal = [];
+    // 従来と同じ理想値±$300の探索範囲。
+    for (let c = Math.max(0, Math.floor(ideal) - 30); c <= Math.min(max, Math.ceil(ideal) + 30); c++) {
+      if (c % (UNIT100 / INPUT_UNIT) <= (amount % UNIT100) / INPUT_UNIT) legal.push(c);
+    }
+    return { amount: amount / INPUT_UNIT, seats, ideal, legal };
+  });
+  const required = (T - L) / INPUT_UNIT;
+  const cap = required + 90;
+  const memo = new Map();
+  function solve(i, prevMaxCut, prevMaxEffective) {
+    if (i === groups.length) return new Map([[0, { dev: 0 }]]);
+    const key = `${i}:${prevMaxCut}:${prevMaxEffective}`;
+    if (memo.has(key)) return memo.get(key);
+    const g = groups[i], count = g.seats.length;
+    const result = new Map();
+    for (let j = 0; j < g.legal.length; j++) {
+      const low = g.legal[j];
+      if (low < prevMaxCut) continue;
+      for (let highCount = 0; highCount < count; highCount++) {
+        const highs = highCount ? g.legal.slice(j + 1).filter(c => c - low <= UNIT100 / INPUT_UNIT) : [low];
+        for (const high of highs) {
+        if (g.amount - high < prevMaxEffective) continue;
+        const total = low * (count - highCount) + high * highCount;
+        if (total > cap) continue;
+        const dev = (count - highCount) * Math.abs(low - g.ideal) + highCount * Math.abs(high - g.ideal);
+        const sub = solve(i + 1, high, g.amount - low);
+        for (const [rest, entry] of sub) {
+          const sum = total + rest;
+          if (sum > cap) continue;
+          const score = dev + entry.dev;
+          if (!result.has(sum) || score < result.get(sum).dev) {
+            result.set(sum, { dev: score, low, high, highCount, rest });
+          }
+        }
+        }
+      }
+    }
+    memo.set(key, result);
+    return result;
+  }
+  const root = solve(0, 0, 0);
+  let best = Infinity;
+  for (const total of root.keys()) if (total >= required && total < best) best = total;
+  const cut = {}, manualPlan = [];
+  if (Number.isFinite(best)) {
+    let prevMaxCut = 0, prevMaxEffective = 0, remaining = best;
+    groups.forEach((g, i) => {
+      const entry = solve(i, prevMaxCut, prevMaxEffective).get(remaining);
+      g.seats.forEach(seat => cut[seat] = entry.low * INPUT_UNIT);
+      if (entry.highCount) manualPlan.push({ seats: g.seats.slice(), count: entry.highCount,
+        add: (entry.high - entry.low) * INPUT_UNIT });
+      prevMaxCut = entry.high;
+      prevMaxEffective = g.amount - entry.low;
+      remaining = entry.rest;
+    });
+  } else {
+    // 探索範囲内に解がなければ、安全な保証床までのカットを提示する。
+    bets.forEach(b => cut[b.seat] = b.amount - floor[b.seat]);
+  }
+  const rows = bets.map(b => ({ seat: b.seat, amount: b.amount,
+    effective: b.amount - cut[b.seat], cut: cut[b.seat],
+    fixed: GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === b.amount - floor[b.seat] && cut[b.seat] > 0
+  }));
+  const effectiveTotal = rows.reduce((sum, r) => sum + r.effective, 0);
+  const cutTotal = T - effectiveTotal;
+  const manualCutTotal = manualPlan.reduce((sum, p) => sum + p.count * p.add, 0);
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff: effectiveTotal - L,
+    remainder: Math.max(0, effectiveTotal - L), manualPlan, manualCutTotal,
+    finalEffectiveTotal: effectiveTotal - manualCutTotal, searchFallback: !Number.isFinite(best) };
+}
+
+// ---- core computation: 旧版（四捨五入＋大ベット席からの足し込み＋逆転ガード） ----
+// index.html の computeSide を逐語コピー（関数名のみ computeSideOld に変更）。
+// 戻り値の形は computeSide と同一なので renderSide でそのまま描画できる。
+function computeSideOld(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  // iterative constrained pro-rata with minimum guarantee floor -> rawEff (sums to L)
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  // overflow guard: if guaranteed floors alone exceed the limit, the cut is impossible
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  let active = bets.slice();
+  const fixedSeats = new Set();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+      fixedSeats.add(b.seat);
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // The cut amount itself is the rounded quantity ($100 units). The remaining
+  // effective bet is derived as bet - cut, so it stays on a $10 step.
+  const betOf = {}; bets.forEach(b => betOf[b.seat] = b.amount);
+  const maxCut = {}; bets.forEach(b => maxCut[b.seat] = b.amount - floor[b.seat]); // floor keeps eff >= guarantee
+  const cut = {};
+
+  // 1) per-seat cut: guarantee-fixed seats keep bet - floor (not rounded);
+  //    others round the proportional cut to $100 (四捨五入, .50 up), clamped to [0, maxCut].
+  bets.forEach(b => {
+    if (fixedSeats.has(b.seat)) {
+      cut[b.seat] = maxCut[b.seat];
+    } else {
+      const r = roundUnit(betOf[b.seat] - rawEff[b.seat], UNIT100);
+      cut[b.seat] = Math.max(0, Math.min(r, maxCut[b.seat]));
+    }
+  });
+
+  const cutSum = () => bets.reduce((s, b) => s + cut[b.seat], 0);
+  const required = T - L; // total that must be cut so effective <= L
+
+  // 2) 旧版の方針＝「最終カットは人間の判断」。
+  //    四捨五入で割り切れずに残った端数を、機械が勝手に最大ベット席へ押し付けると、
+  //    同額ベットの中でも席番号の若い人だけが余分に切られて不公平になる（例: 席1だけ$100）。
+  //    そこでここでは自動で足し込まず、端数は remainder として残し、候補席を提示して
+  //    人間が手でカットする方式にする（候補の算出は単調性ガードの後で行う）。
+
+  // 3) defensive monotonicity guard: bigger bet must not get a smaller cut.
+  //    Bump the larger-bet seat by $100 (stays <= limit) until order is restored.
+  let guard = 0;
+  while (guard++ <= bets.length * bets.length) {
+    let fixed = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount > b.amount && cut[a.seat] < cut[b.seat] && cut[a.seat] < maxCut[a.seat]) {
+          cut[a.seat] = Math.min(cut[a.seat] + UNIT100, maxCut[a.seat]);
+          fixed = true;
+        }
+      }
+    }
+    if (!fixed) break;
+  }
+
+  // 3b) 有効ベット逆転ガード: ベットが多い席の有効ベットが、それより少ないベットの
+  //      席を下回ってはいけない。起きたら削りすぎなので大ベット席のカットを$100戻す。
+  //      （戻す＝減らす方向だけ。戻した分はすべて remainder=人間判断へ回る）
+  let eg = 0;
+  while (eg++ <= bets.length * bets.length) {
+    let f = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount > b.amount &&
+            (a.amount - cut[a.seat]) < (b.amount - cut[b.seat]) &&
+            cut[a.seat] >= UNIT100) {
+          cut[a.seat] -= UNIT100;
+          f = true;
+        }
+      }
+    }
+    if (!f) break;
+  }
+
+  // 3c) 端数を機械が安全な範囲で $100 ずつ自動カットし、最後の ≤$100 を人間判断に残す。
+  //     各 $100 は安全なときだけ切る: トップ席（=余地のある最大ベット席）が単独で、
+  //     切っても自分より少なく賭けた席の有効ベットを下回らず（逆転回避）、保証床を割らないとき。
+  //     同額トップが複数・逆転が出る・残りが $100 以下になったら止めて人間判断（remainder）へ。
+  let g3c = 0;
+  while ((required - cutSum()) > UNIT100 && g3c++ <= bets.length * bets.length) {
+    const room3c = bets.filter(b => cut[b.seat] < maxCut[b.seat]);
+    if (room3c.length === 0) break;
+    const top3c = Math.max.apply(null, room3c.map(b => b.amount));
+    const tops3c = room3c.filter(b => b.amount === top3c);
+    if (tops3c.length !== 1) break;                  // 同額トップ複数 → 人間判断へ（不公平回避）
+    const s = tops3c[0].seat;
+    const newEff = tops3c[0].amount - (cut[s] + UNIT100);
+    let safe = (cut[s] + UNIT100) <= maxCut[s];       // 保証床を割らない
+    for (const b of bets) {                           // 自分より少なく賭けた席を下回らない（逆転回避）
+      if (b.amount < tops3c[0].amount && newEff < (b.amount - cut[b.seat])) safe = false;
+    }
+    if (!safe) break;
+    cut[s] += UNIT100;
+  }
+
+  // 3d) 整列の戻し: ここまでで残った「逆転」を、機械が確定せず人間判断(remainder)へ回す。
+  //     逆転を生む席のカットを、チップを割らない範囲(cut%100 ≦ bet%100)・保証床を割らない
+  //     範囲で $10 刻みに“控えめに戻す”。減算のみなので必ず停止し、最悪でもカットを $0 まで
+  //     戻せば逆転は必ず消える（戻した分は step4 の remainder に乗り、人間が手でカットする）。
+  const effOf = s => betOf[s] - cut[s];
+  const chipOK = (s, v) => v >= 0 && v <= maxCut[s] && (v % UNIT100) <= (betOf[s] % UNIT100);
+  const reduceTo = (s, target) => {                  // cut[s] を target 以下のチップ合法な最大値へ
+    let v = Math.min(cut[s], target);
+    while (v >= 0 && !chipOK(s, v)) v -= INPUT_UNIT;
+    if (v >= 0 && v < cut[s]) { cut[s] = v; return true; }
+    return false;
+  };
+  let g3d = 0;
+  while (g3d++ <= bets.length * bets.length * 8) {
+    let changed = false;
+    for (const a of bets) {
+      for (const b of bets) {
+        if (a.amount <= b.amount) continue;
+        // カット逆転: 多く賭けた a のカットが小さい → 少ない b のカットを cut[a] 以下へ戻す
+        if (cut[a.seat] < cut[b.seat] && reduceTo(b.seat, cut[a.seat])) changed = true;
+        // 有効ベット逆転: 多く賭けた a の有効が小さい → a のカットを下げ eff[a] ≧ eff[b] にする
+        if (effOf(a.seat) < effOf(b.seat) &&
+            reduceTo(a.seat, betOf[a.seat] - effOf(b.seat))) changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  // 4) 人間が決める端数（remainder）と、その「均等な切り方」を助言する。
+  //    remainder = まだ切り切れていない額（これを人間が手でカットすれば上限ちょうどになる）。
+  //    助言 = 端数を「有効ベットが高い席」から $10 刻みで均等に配る。各 $10 は、保証床を割らず・
+  //    $100チップを割らず（cut%100 ≦ bet%100）・逆転を生まないときだけ。結果 suggest=[{seat,add}]。
+  //    cut[] は変えない（＝確定は人間。同額上位席へ均等に切る案を提示するだけ）。
+  const remainder = Math.max(0, required - cutSum());
+  let suggest = [];
+  if (remainder > 0) {
+    const add = {}; bets.forEach(b => add[b.seat] = 0);
+    const effWith = b => b.amount - cut[b.seat] - add[b.seat];
+    let rem = remainder, gR = 0;
+    while (rem >= INPUT_UNIT && gR++ < 100000) {
+      let pick = null, pickEff = -1;
+      for (const b of bets) {
+        const nv = cut[b.seat] + add[b.seat] + INPUT_UNIT;
+        if (nv > maxCut[b.seat]) continue;                  // 保証床を割らない
+        if ((nv % UNIT100) > (b.amount % UNIT100)) continue; // $100チップを割らない
+        const newEff = b.amount - nv;
+        let safe = true;                                     // 自分より少なく賭けた席を下回らない
+        for (const o of bets) {
+          if (o.seat !== b.seat && o.amount < b.amount && newEff < effWith(o)) { safe = false; break; }
+        }
+        if (!safe) continue;
+        if (effWith(b) > pickEff) { pickEff = effWith(b); pick = b; } // 有効が最も高い席へ
+      }
+      if (!pick) break;
+      add[pick.seat] += INPUT_UNIT; rem -= INPUT_UNIT;
+    }
+    suggest = bets.filter(b => add[b.seat] > 0)
+                  .map(b => ({ seat: b.seat, add: add[b.seat] }))
+                  .sort((a, b) => a.seat - b.seat);
+  }
+  const candSeats = suggest.map(s => s.seat);
+
+  // a seat pushed down to its guarantee floor (by the bump/guard steps) is also
+  // guarantee-bound: mark it 保障 so its non-$100 cut (= bet - 保障) is explained.
+  const rows = bets.map(b => ({
+    seat: b.seat, amount: b.amount,
+    effective: b.amount - cut[b.seat], cut: cut[b.seat],
+    fixed: fixedSeats.has(b.seat) ||
+           (GUARANTEE > 0 && floor[b.seat] === GUARANTEE && cut[b.seat] === maxCut[b.seat] && cut[b.seat] > 0),
+    cand: candSeats.indexOf(b.seat) >= 0
+  }));
+  const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
+  const diff = effectiveTotal - L; // + : over limit (= 人間が手でカットする端数), - : under limit
+
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, remainder, candSeats, suggest };
+}
+
+// ---- core computation: 公平版（$10単位カット・完全公平按分） ----
+// 方針: 既存2版が持つ「$100チップ非分割(cut%100≤bet%100)」制約を撤廃し、$10単位で削る。
+//   ・前段は computeSide と同じ「保証床つき反復比例按分」で実数 rawEff(合計=L)を得る。
+//   ・rawEff を $10 粒度へ最大剰余法で丸め、有効ベット合計を上限ちょうど(=L)に合わせる。
+//   ・最低保証の床(min(bet,GUARANTEE))は維持。金額が異なる席は自動で上限ちょうど(diff=0)。
+//   ・例外: 同額ベットの席は$10単位で公平に割り切れないことがある(例: $400×8で1人$25が作れない)。
+//     その分は機械が勝手に振らず、同額席は全員同じカットにして残りを人間判断(tieRemainder)へ回す。
+//   ・逆転禁止: ベット昇順で cut・有効ベットとも非減少。同額グループ単位の配分でこれを保つ。
+function computeSideFair(bets, L, GUARANTEE) {
+  const T = bets.reduce((s, b) => s + b.amount, 0);
+
+  if (bets.length === 0) return { state: 'none', T: 0 };
+
+  if (T <= L) {
+    const rows = bets.map(b => ({ seat: b.seat, amount: b.amount, effective: b.amount, cut: 0, fixed: false }));
+    return { state: 'nocut', T, ratio: 1, rows, effectiveTotal: T, cutTotal: 0, diff: T - L };
+  }
+
+  const floor = {};
+  bets.forEach(b => floor[b.seat] = Math.min(b.amount, GUARANTEE));
+
+  const floorSum = bets.reduce((s, b) => s + floor[b.seat], 0);
+  if (floorSum > L) {
+    return { state: 'overflow', T, floorSum };
+  }
+
+  // 保証床つき反復比例按分 -> rawEff（実数, 合計=L, ベット昇順で非減少）
+  let active = bets.slice();
+  const rawEff = {};
+  let budget = L;
+  let ratio = L / T;
+
+  while (active.length > 0) {
+    const activeSum = active.reduce((s, b) => s + b.amount, 0);
+    ratio = budget / activeSum;
+    const newlyFixed = active.filter(b => b.amount * ratio < floor[b.seat]);
+    if (newlyFixed.length === 0) {
+      active.forEach(b => rawEff[b.seat] = b.amount * ratio);
+      break;
+    }
+    newlyFixed.forEach(b => {
+      rawEff[b.seat] = floor[b.seat];
+      budget -= floor[b.seat];
+    });
+    active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // ---- $10粒度への丸め（同額グループ単位の最大剰余法）----
+  // 各席を floor10(rawEff) に落とし、残り単位(units)を $10 ずつ配って上限へ近づける。
+  // ただし配分は「同額ベットのグループ」単位でのみ行う（同額席は常に全員同じカット）。
+  // 端数(frac)の大きいグループから、グループ全員に $10 ずつ。配り切れないグループ
+  // (units < 人数) が来たら止め、残りは人間判断(tieRemainder)として候補席を提示する。
+  // → 金額が異なる席は最大剰余法で自動・上限ちょうど。同額で割り切れない分だけ人間が決める。
+  const eff = {};
+  bets.forEach(b => eff[b.seat] = Math.floor(rawEff[b.seat] / INPUT_UNIT) * INPUT_UNIT);
+  let units = Math.round((L - bets.reduce((s, b) => s + eff[b.seat], 0)) / INPUT_UNIT);
+
+  // 同額ベットでグループ化（eff を上げてもベットを超えない=cut≥0 の席だけが加点候補）
+  const groupsMap = {};
+  bets.filter(b => eff[b.seat] + INPUT_UNIT <= b.amount).forEach(b => {
+    (groupsMap[b.amount] = groupsMap[b.amount] || []).push(b.seat);
+  });
+  const groups = Object.keys(groupsMap).map(a => ({
+    amount: Number(a), seats: groupsMap[a],
+    frac: rawEff[groupsMap[a][0]] - eff[groupsMap[a][0]]
+  })).sort((g1, g2) => g2.frac - g1.frac || g2.amount - g1.amount);
+
+  // frac の大きいグループから全員に $10。途中で配り切れないグループで停止（同額を割らない）。
+  let candSeats = [];
+  for (const g of groups) {
+    if (units >= g.seats.length) {
+      g.seats.forEach(s => eff[s] += INPUT_UNIT);
+      units -= g.seats.length;
+    } else {
+      if (units > 0) candSeats = g.seats.slice().sort((a, b) => a - b);
+      break;
+    }
+  }
+  const tieRemainder = units * INPUT_UNIT;   // 同額のため上限まで配り切れず残った額（人間判断）
+
+  const cut = {};
+  bets.forEach(b => cut[b.seat] = b.amount - eff[b.seat]);
+
+  const amtOf = {}; bets.forEach(b => amtOf[b.seat] = b.amount);
+  const isGuarFixed = (s) => GUARANTEE > 0 && floor[s] === GUARANTEE && cut[s] === (amtOf[s] - floor[s]) && cut[s] > 0;
+  const rows = bets.map(b => ({
+    seat: b.seat, amount: b.amount,
+    effective: eff[b.seat], cut: cut[b.seat],
+    fixed: isGuarFixed(b.seat),
+    cand: candSeats.indexOf(b.seat) >= 0
+  }));
+  const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
+  const diff = effectiveTotal - L; // 同額の割り切れなさで上限を下回ったとき diff<0（tieRemainder と一致）
+
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, tieRemainder, candSeats };
+}
+
+// ---- render result (single pool) ----
+function renderSide(res, L, GUARANTEE) {
+  if (res.state === 'none') {
+    return `<div class="empty">ベットがありません。</div>`;
+  }
+
+  if (res.state === 'overflow') {
+    return `<div class="remainder-box" style="background:#2a0f0f;border-color:var(--banker);color:#fca5a5;">`
+         + `<div>⚠ 計算できません。最低保証の合計 <b>${fmt(res.floorSum)}</b> が上限 <b>${fmt(L)}</b> を超えています。</div>`
+         + `<div>このベット構成では全員に最低保証 ${fmt(GUARANTEE)} を渡すと上限を超えるため按分できません。上限を上げるか最低保証を下げてください。</div>`
+         + `</div>`;
+  }
+
+  let html = '';
+
+  // guarantee-protected seat: effective bet held at its floor (= min(bet, guarantee))
+  const isGuar = r => GUARANTEE > 0 && r.effective === Math.min(r.amount, GUARANTEE);
+
+  // prominent key figures: bet total + effective total
+  const effTotalVal = res.state === 'nocut' ? res.T : res.effectiveTotal;
+  let effNote, effNoteClass;
+  if (res.state === 'nocut') {
+    effNote = `上限 ${fmt(L)} 以内・カットなし`; effNoteClass = 'ok-note';
+  } else if (res.remainder > 0) {
+    effNote = `上限 ${fmt(L)} まで あと ${fmt(res.remainder)} は手動カット`; effNoteClass = 'cut-note';
+  } else if (res.diff > 0) {
+    effNote = `上限 ${fmt(L)} を +${fmt(res.diff)} 超過`; effNoteClass = 'cut-note';
+  } else if (res.diff < 0) {
+    effNote = `上限 ${fmt(L)} まで −${fmt(-res.diff)}`; effNoteClass = 'cut-note';
+  } else {
+    effNote = `上限 ${fmt(L)} ちょうど`; effNoteClass = 'ok-note';
+  }
+  const cutTotalVal = res.state === 'nocut' ? 0 : res.cutTotal;
+  html += `<div class="stats">`
+        + `<div class="stat"><span class="stat-label">ベット合計</span><span class="stat-val">${fmt(res.T)}</span></div>`
+        + `<div class="stat stat-cut"><span class="stat-label">カット数合計</span><span class="stat-val">${cutTotalVal > 0 ? fmt(cutTotalVal) : '—'}</span></div>`
+        + `<div class="stat stat-eff"><span class="stat-label">${res.manualCutTotal > 0 ? '有効ベット合計（調整前）' : '有効ベット合計'}</span><span class="stat-val">${fmt(effTotalVal)}</span><span class="stat-note ${effNoteClass}">${effNote}</span></div>`
+        + `</div>`;
+
+  if (res.state === 'cut' && res.manualPlan && res.manualPlan.length) {
+    html += `<div class="remainder-box" data-manual-cut>`
+      + `<div><b>未完了：あと ${fmt(res.remainder)} のカットが必要です</b></div>`
+      + `<div>表の金額は共通カット後・端数調整前です。次の候補から人間が選んで追加カットしてください。</div>`
+      + res.manualPlan.map(p => `<div><b>${p.seats.map(s => '席' + s).join('・')}</b> のうち <b>${p.count} 人</b>から <b>${fmt(p.add)} ずつ</b>追加カット</div>`).join('')
+      + `<div>追加カット合計 <b>${fmt(res.manualCutTotal)}</b>。調整後の有効ベット合計は <b>${fmt(res.finalEffectiveTotal)}</b>です。</div>`
+      + (res.finalEffectiveTotal < L ? `<div>チップ単位と逆転防止のため、調整後は上限より ${fmt(L - res.finalEffectiveTotal)} 少なくなります。</div>` : `<div>指定人数・金額で調整すると上限ちょうどになります。</div>`)
+      + `</div>`;
+  }
+  if (res.searchFallback) html += `<div class="remainder-box">通常の探索範囲内に配分が見つからないため、最低保証を残すカットを表示しています。最小カットの保証はありません。</div>`;
+
+  // 旧版のみ: 機械で割り切れない端数を「人間が手でカットする分」として提示する。
+  // GPT版は manualPlan で追加カットを提示するため、この旧版用表示を使わない。
+  if (res.state === 'cut' && res.remainder > 0 && !res.manualPlan) {
+    const sug = res.suggest || [];
+    const sugTotal = sug.reduce((s, x) => s + x.add, 0);
+    let detail;
+    if (sug.length === 0) {
+      detail = `余地のある席から <b>${fmt(res.remainder)}</b> をカット`;
+    } else if (sug.length === 1) {
+      detail = `<b>席${sug[0].seat}</b> から <b>${fmt(sug[0].add)}</b> をカット`;
+    } else if (sug.every(x => x.add === sug[0].add)) {
+      detail = `<b>${sug.map(x => '席' + x.seat).join('・')}</b> へ <b>${fmt(sug[0].add)} ずつ</b>カット`;
+    } else {
+      detail = sug.map(x => `席${x.seat} に <b>${fmt(x.add)}</b>`).join('・') + ' をカット';
+    }
+    // 助言で端数を切り切れない場合は、残りも併記
+    const leftover = res.remainder - sugTotal;
+    html += `<div class="remainder-box">`
+          + `<div>機械で割り切れない端数 <b>${fmt(res.remainder)}</b> が残っています。旧版は<b>最終カットを人間が判断</b>します。</div>`
+          + `<div>おすすめ: ${detail} すると上限 ${fmt(L)} ${leftover > 0 ? `に近づきます（あと ${fmt(leftover)} は別途調整）` : 'ちょうどになります'}。</div>`
+          + `</div>`;
+  }
+
+  // 公平版のみ: 同額ベットで$10単位に割り切れない分は、機械が勝手に振らず人間判断に回す。
+  if (res.state === 'cut' && res.tieRemainder > 0) {
+    const give = res.tieRemainder / INPUT_UNIT;            // $10ずつ戻す席数
+    const seatList = (res.candSeats || []).map(s => '席' + s).join('・');
+    html += `<div class="remainder-box">`
+          + `<div>同額ベットの席があり、$10単位では上限ちょうどに分けきれません。公平のため<b>同額の席は全員同じカット</b>にしています（上限まで <b>${fmt(res.tieRemainder)}</b> 残）。</div>`
+          + `<div>上限ちょうどにしたいときは、<b>${seatList}</b> のうち <b>${give} 席</b>のカットを <b>$10 ずつ戻す</b>かを人間が判断してください。</div>`
+          + `</div>`;
+  }
+
+  if (res.state === 'cut') {
+    html += `<div class="rates">`;
+    // 実績: 実際に切った数字 ÷ ベット
+    const overallRatio = res.cutTotal / res.T;
+    html += `<div class="rate"><div class="rate-main"><span class="rate-left">カット率（全体）</span><b class="cut">${(overallRatio * 100).toFixed(2)}%</b></div>`
+          + `<div class="rate-desc">カット数合計 ÷ ベット合計</div></div>`;
+    // cut-target rate: exclude guarantee-fixed seats from both numerator and denominator
+    const targetBet = res.rows.reduce((s, r) => isGuar(r) ? s : s + r.amount, 0);
+    const targetCut = res.rows.reduce((s, r) => isGuar(r) ? s : s + r.cut, 0);
+    if (targetBet > 0) {
+      const targetRatio = targetCut / targetBet;
+      html += `<div class="rate"><div class="rate-main"><span>カット率（対象席のみ）</span><b class="cut">${(targetRatio * 100).toFixed(2)}%（${(targetRatio * 10).toFixed(1)}割カット）</b></div>`
+            + `<div class="rate-desc">保障席を除いた実カット率</div></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // detail table with totals row
+  html += `<table class="rtable${showSeatRate ? ' show-rate' : ''}"><thead><tr>`
+        + `<th class="seat-cell">席</th><th class="rate-col">率</th><th>ベット</th><th>有効ベット</th><th>カット数</th>`
+        + `</tr></thead><tbody>`;
+  const sugMap = {};
+  (res.suggest || []).forEach(s => sugMap[s.seat] = s.add);
+  res.rows.slice().sort((a, b) => a.seat - b.seat).forEach(r => {
+    const mark = (res.state === 'cut' && isGuar(r)) ? `<span class="guar-mark">✱</span>` : '';
+    const sugBadge = sugMap[r.seat] ? `<span class="sug-cut">${sugMap[r.seat].toLocaleString('en-US')}</span>` : '';
+    html += `<tr class="${r.cand ? 'cand' : ''}">`
+          + `<td class="seat-cell">${r.seat}</td>`
+          + `<td class="rate-col">${r.amount > 0 && r.cut > 0 ? (r.cut / r.amount * 100).toFixed(1) + '%' : '—'}</td>`
+          + `<td>${fmt(r.amount)}</td>`
+          + `<td class="eff-col">${sugBadge}${mark}${fmt(r.effective)}</td>`
+          + `<td class="refund">${r.cut > 0 ? fmt(r.cut) : '—'}</td>`
+          + `</tr>`;
+  });
+  html += `</tbody>`;
+  const betTotal = res.rows.reduce((s, r) => s + r.amount, 0);
+  const effTotal = res.rows.reduce((s, r) => s + r.effective, 0);
+  const cutTotal = res.rows.reduce((s, r) => s + r.cut, 0);
+  html += `<tfoot><tr>`
+        + `<td class="seat-cell">合計</td>`
+        + `<td class="rate-col">${betTotal > 0 && cutTotal > 0 ? (cutTotal / betTotal * 100).toFixed(1) + '%' : '—'}</td>`
+        + `<td>${fmt(betTotal)}</td>`
+        + `<td class="eff-col">${fmt(effTotal)}</td>`
+        + `<td class="cutnum">${cutTotal > 0 ? fmt(cutTotal) : '—'}</td>`
+        + `</tr></tfoot>`;
+  html += `</table>`;
+  return html;
+}
+
+// ---- validate a limit / guarantee pair ----
+function validateLG(L, GUARANTEE) {
+  const errors = [];
+  if (!Number.isFinite(L) || L <= 0) errors.push('上限ベットは正の数で入力してください');
+  else if (L % INPUT_UNIT !== 0) errors.push(`上限ベット $${L} は$10刻みではありません`);
+  if (!Number.isFinite(GUARANTEE) || GUARANTEE < 0) errors.push('最低保証は0以上の数で入力してください');
+  else if (GUARANTEE % UNIT100 !== 0) errors.push(`最低保証 $${GUARANTEE} は$100刻みで入力してください`);
+  return errors;
+}
+
+// ---- read & validate settings (from active preset, mirrored to hidden inputs) ----
+function readSettings() {
+  const L = Number(document.getElementById('limitInput').value.trim());
+  const GUARANTEE = Number(document.getElementById('guaranteeInput').value.trim());
+  return { L, GUARANTEE, errors: validateLG(L, GUARANTEE) };
+}
+
+// ---- inline cut cells next to each input ----
+function updateInlineCuts(res) {
+  const cells = {};
+  document.querySelectorAll('.cut-cell').forEach(c => cells[c.dataset.seat] = c);
+  Object.values(cells).forEach(c => { c.textContent = '—'; c.className = 'cut-cell'; });
+  if (!res || res.state !== 'cut') return;
+  res.rows.forEach(r => {
+    const c = cells[r.seat];
+    if (!c) return;
+    if (r.cut > 0) {
+      c.className = 'cut-cell has-cut';
+      c.textContent = fmt(r.cut);
+    }
+  });
+}
+
+function clearInlineCuts() {
+  document.querySelectorAll('.cut-cell').forEach(c => { c.textContent = '—'; c.className = 'cut-cell'; });
+}
+
+// ---- run ----
+function calculate() {
+  const s = readSettings();
+  const b = readBets();
+  const allErrors = [...s.errors, ...b.errors];
+  document.getElementById('errors').textContent =
+    allErrors.length ? '⚠ ' + allErrors.join(' / ') : '';
+
+  if (s.errors.length) {
+    document.getElementById('res').innerHTML = '<div class="empty">設定値を直してください。</div>';
+    clearInlineCuts();
+    return;
+  }
+
+  const fn = calcMode === 'old' ? computeSideOld : calcMode === 'fair' ? computeSideFair : computeSide;
+  const res = fn(b.bets, s.L, s.GUARANTEE);
+  document.getElementById('res').innerHTML = renderSide(res, s.L, s.GUARANTEE);
+  updateInlineCuts(res);
+}
+
+function clearAll() {
+  document.querySelectorAll('input[data-bet]').forEach(i => { i.value = ''; i.classList.remove('bad'); });
+  document.getElementById('errors').textContent = '';
+  document.getElementById('res').innerHTML = '<div class="empty">ベット額を入力すると結果が表示されます。</div>';
+  clearInlineCuts();
+}
+
+document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+// ===== 詳細テーブル: 席列タップで個人カット率列を表示/非表示 =====
+// #res は再描画されるのでイベント委譲で拾う。率セルは常にDOMにありCSSで隠すだけ→クラス切替で即時。
+document.getElementById('res').addEventListener('click', (e) => {
+  if (!e.target.closest('.seat-cell')) return;
+  showSeatRate = !showSeatRate;
+  const t = document.querySelector('.rtable');
+  if (t) t.classList.toggle('show-rate', showSeatRate);
+});
+
+// ===== 計算モード切替（最新版 / 旧版）=====
+function syncCalcToggle() {
+  document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === calcMode));
+}
+document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
+  b.addEventListener('click', () => {
+    calcMode = b.dataset.mode;
+    saveCalcMode();
+    syncCalcToggle();
+    calculate();
+  }));
+
+// ===== view switching: calc / help / settings =====
+const views = {
+  calc: document.getElementById('calcView'),
+  help: document.getElementById('helpView'),
+  settings: document.getElementById('settingsView'),
+};
+const helpBtn = document.getElementById('helpBtn');
+let currentView = 'calc';
+function setView(target) {
+  currentView = target;
+  for (const k in views) views[k].toggleAttribute('hidden', k !== target);
+  helpBtn.textContent = target === 'calc' ? '使い方' : '← 計算に戻る';
+}
+helpBtn.addEventListener('click', () => setView(currentView === 'calc' ? 'help' : 'calc'));
+
+// ===== camouflage cover: blank white page; tap top-right to toggle =====
+const coverView = document.getElementById('coverView');
+const hideZone  = document.getElementById('hideZone');
+let covered = true;
+function setCovered(v){ covered = v; coverView.toggleAttribute('hidden', !v); }
+hideZone.addEventListener('click', () => setCovered(!covered));
+
+// ===== presets (上限/保証) =====
+const DEFAULT_PRESETS = [
+  { label: 'A', limit: 3000, guar: 300, scale: 1 },
+  { label: 'B', limit: 5000, guar: 500, scale: 1 },
+  { label: 'C', limit: 5000, guar: 500, scale: 1 },
+  { label: 'D', limit: 8000, guar: 1000, scale: 1 },
+];
+const PRESETS_KEY = 'cut_gpt_presets';
+const ACTIVE_KEY = 'cut_gpt_active';
+let presets = DEFAULT_PRESETS.map(p => ({ ...p }));
+let activeIdx = 0;
+let selectedIdx = 0;
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved) && saved.length === 4) {
+        presets = DEFAULT_PRESETS.map((d, i) => ({
+          label: d.label,
+          limit: Number(saved[i] && saved[i].limit),
+          guar: Number(saved[i] && saved[i].guar),
+          scale: saved[i] && saved[i].scale,
+        })).map((p, i) => ({
+          label: p.label,
+          limit: Number.isFinite(p.limit) ? p.limit : DEFAULT_PRESETS[i].limit,
+          guar: Number.isFinite(p.guar) ? Math.round(p.guar / 100) * 100 : DEFAULT_PRESETS[i].guar,
+          scale: (p.scale === 1 || p.scale === 100) ? p.scale : DEFAULT_PRESETS[i].scale,
+        }));
+      }
+    }
+    const a = Number(localStorage.getItem(ACTIVE_KEY));
+    if (Number.isInteger(a) && a >= 0 && a < 4) activeIdx = a;
+    const cm = localStorage.getItem(CALCMODE_KEY);
+    if (cm === 'old' || cm === 'latest' || cm === 'fair') calcMode = cm;   // 不正値は無視
+  } catch (e) { /* localStorage unavailable -> defaults */ }
+}
+function savePresets() { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); } catch (e) {} }
+function saveActive() { try { localStorage.setItem(ACTIVE_KEY, String(activeIdx)); } catch (e) {} }
+function saveCalcMode() { try { localStorage.setItem(CALCMODE_KEY, calcMode); } catch (e) {} }
+
+// push the active preset into the hidden L/保証 inputs and recompute
+function applyActive() {
+  document.getElementById('limitInput').value = String(presets[activeIdx].limit);
+  document.getElementById('guaranteeInput').value = String(presets[activeIdx].guar);
+  document.getElementById('presetChipLabel').textContent = presets[activeIdx].label;
+  currentBetScale = presets[activeIdx].scale;
+  document.querySelectorAll('input[data-bet]').forEach(inp => {
+    inp.step = currentBetScale === 100 ? '0.1' : '10';
+    inp.setAttribute('inputmode', currentBetScale === 100 ? 'decimal' : 'numeric');
+  });
+  const unitLabel = document.querySelector('#inputTable thead .unit');
+  if (unitLabel) unitLabel.textContent = currentBetScale === 100 ? ' (1=$100)' : ' (100=$100)';
+  calculate();
+}
+
+// build the 4 preset rows in the settings page
+const presetList = document.getElementById('presetList');
+function renderSettings() {
+  presetList.innerHTML = presets.map((p, i) =>
+    `<div class="preset-row${i === selectedIdx ? ' selected' : ''}" data-idx="${i}">`
+    + `<button type="button" class="preset-pick" data-idx="${i}">${p.label}</button>`
+    + `<div class="preset-fields">`
+    + `<div class="preset-field"><label>上限 ($)</label>`
+    + `<input class="p-limit" data-idx="${i}" type="number" inputmode="numeric" min="10" step="10" value="${p.limit}"></div>`
+    + `<div class="preset-field"><label>最低保証 ($/100刻み)</label>`
+    + `<input class="p-guar" data-idx="${i}" type="number" inputmode="numeric" min="0" step="100" value="${p.guar}"></div>`
+    + `<div class="preset-field"><label>入力単位</label>`
+    + `<div class="unit-opts">`
+    + `<label><input class="p-unit" type="radio" name="unit-${i}" data-idx="${i}" value="100"${p.scale === 100 ? ' checked' : ''}>1 = $100</label>`
+    + `<label><input class="p-unit" type="radio" name="unit-${i}" data-idx="${i}" value="1"${p.scale === 1 ? ' checked' : ''}>100 = $100</label>`
+    + `</div></div>`
+    + `</div></div>`
+  ).join('');
+}
+function highlightSelected() {
+  presetList.querySelectorAll('.preset-row').forEach(row =>
+    row.classList.toggle('selected', Number(row.dataset.idx) === selectedIdx));
+}
+function openSettings() {
+  selectedIdx = activeIdx;
+  renderSettings();
+  document.getElementById('settingsError').textContent = '';
+  setView('settings');
+}
+
+document.getElementById('presetChip').addEventListener('click', openSettings);
+
+presetList.addEventListener('click', e => {
+  const pick = e.target.closest('.preset-pick');
+  if (!pick) return;
+  selectedIdx = Number(pick.dataset.idx);
+  highlightSelected();
+});
+
+presetList.addEventListener('input', e => {
+  const el = e.target;
+  const idx = Number(el.dataset.idx);
+  if (el.classList.contains('p-limit')) { presets[idx].limit = Number(el.value); savePresets(); }
+  else if (el.classList.contains('p-guar')) { presets[idx].guar = Number(el.value); savePresets(); }
+  else if (el.classList.contains('p-unit')) { presets[idx].scale = Number(el.value); savePresets(); }
+});
+
+document.getElementById('settingsApply').addEventListener('click', () => {
+  const p = presets[selectedIdx];
+  const errs = validateLG(p.limit, p.guar);
+  const errBox = document.getElementById('settingsError');
+  if (errs.length) { errBox.textContent = '⚠ ' + errs.join(' / '); return; }
+  errBox.textContent = '';
+  const prevScale = currentBetScale;
+  activeIdx = selectedIdx;
+  saveActive();
+  if (presets[activeIdx].scale !== prevScale) {
+    document.querySelectorAll('input[data-bet]').forEach(i => { i.value = ''; i.classList.remove('bad'); });
+  }
+  applyActive();
+  setView('calc');
+});
+
+// real-time recompute while typing in the calculator only
+document.querySelectorAll('#calcView input').forEach(i => i.addEventListener('input', calculate));
+// Enter: calculate in calc view
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (currentView === 'calc' && e.target.matches('input[data-bet]')) calculate();
+});
+
+// ===== init: restore presets & active selection, then apply =====
+loadPrefs();
+syncCalcToggle();   // 復元した calcMode をトグルに反映
+applyActive();
+setCovered(true);   // always start on the blank white cover
+
+</script>
+</body>
+</html>

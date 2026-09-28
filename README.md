@@ -2,12 +2,20 @@
 
 バカラで「賭け先ごとの上限」を超えたベットを、比例配分でカットして客に返す額を計算する実務ツール。
 
-## どれが本物か（重要）
+## Claude版とGPT版の管理
 
-- **本物のアプリはこの1ファイルだけ：** `baccarat-cut-work.html`
-- 単一HTML（CSS・JS・計算ロジック全部入り）。ブラウザで開くだけで動く。
-- 過去の重複・旧版は `~/Desktop/ClaudeApps/_旧アーカイブ_2026-06-18/` に退避済み。
-  今後アプリを直すときは、**必ずこのリポジトリ内の `baccarat-cut-work.html` を編集**すること。
+同じリポジトリ内で、本体・URL・テスト・保存設定を分けて管理します。
+
+| 版 | 本体 | 公開URL | テスト |
+|---|---|---|---|
+| Claude版（元のアプリ） | `baccarat-cut-work.html` | [Claude版](https://babu-tools.github.io/hello/baccarat-cut-work.html) | `テスト実行.command` / `tests/`直下 |
+| GPT版 | `baccarat-cut-gpt.html` | [GPT版](https://babu-tools.github.io/hello/baccarat-cut-gpt.html) | `GPT版テスト実行.command` / `tests/gpt/` |
+
+- どちらも単一HTMLで、ブラウザで開くだけで動きます。
+- GPT版の仕様・変更履歴は [GPT_VERSION.md](GPT_VERSION.md) に記録します。
+- 編集前に対象の版を確認し、片方の修正をもう片方へ自動で反映しません。
+- GPT版の保存設定は `cut_gpt_*`、Claude版は従来の `cut_*` を使います。
+- 以下の既知バグ・テスト・運用の説明は元のClaude版についての記録です。
 
 ## テスト（計算が壊れていないかの自動チェック）
 
