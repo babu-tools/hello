@@ -31,6 +31,7 @@ h1{font-size:23px;letter-spacing:-.03em;margin:0;line-height:1.4}
 h2{margin:0;font-size:18px}
 h3{font-size:15px}
 .header-actions{display:flex;gap:8px}
+#hideBtn{width:64px;flex-shrink:0}
 .version{font-size:11px;color:var(--sub);margin-left:8px;font-weight:500}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px}
 .toolbar{display:flex;align-items:center;gap:20px;padding:16px 20px;margin-bottom:20px}
@@ -144,6 +145,7 @@ body:not(.covered) #hideZone{display:none}
 h1{font-size:19px}
 .version{font-size:10px}
 .header-actions{gap:5px}
+#hideBtn{width:44px}
 .header-actions button{font-size:12px;padding:6px 9px}
 .eyebrow{font-size:9px}
 .toolbar{gap:14px;padding:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -181,8 +183,8 @@ h1{font-size:19px}
 <div id="coverView"></div><button id="hideZone" aria-label="計算画面を表示"></button>
 <div class="wrap">
 <header class="topbar">
-  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.4</span></h1></div></div>
-  <div class="header-actions"><button id="helpBtn">使い方</button><button id="hideBtn" aria-label="計算画面を隠す">隠す</button></div>
+  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.5</span></h1></div></div>
+  <div class="header-actions"><button id="helpBtn">使い方</button><button id="hideBtn" aria-label="計算画面を隠す"></button></div>
 </header>
 <main id="calcView">
   <div class="card toolbar">
@@ -212,7 +214,7 @@ h1{font-size:19px}
 <h3>操作のヒント</h3><p>入力表の席番号をタップすると、その席を消去できます。上部のベット合計は入力・消去に合わせて更新されます。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。カット額はやわらかい赤、残る額は青です。席番号をタップすると、個別のカット率（カット額÷元のベット額、小数1桁）を表示・非表示にできます。追加カット前の割合です。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
 </div></section>
 <section id="settingsView" hidden><div class="card"><div class="step">TABLE SETTINGS</div><h2>卓の設定</h2><p class="settings-lead">A〜Dから使用する設定を選び、「この設定で計算」で反映します。</p><div id="presetList"></div><div id="settingsError" class="errors" role="alert"></div><div class="settings-actions"><button class="calc" id="settingsApply">この設定で計算</button></div></div></section>
-<footer class="footer">GPT版 v1.4 · 入力内容はこの端末で計算します</footer>
+<footer class="footer">GPT版 v1.5 · 入力内容はこの端末で計算します</footer>
 </div>
 
 <script>
