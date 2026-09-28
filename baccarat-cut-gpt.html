@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon.png">
 <title>検索</title>
 <style>
-:root{--bg:#0c1217;--panel:#141e26;--line:#293843;--txt:#edf3f5;--sub:#a2b1bb;--accent:#8be0c6;--warn:#ffd086;--ok:#8be0c6;--remainder:#ffd086;--cutnum:#edf3f5;--banker:#b74f47;color-scheme:dark}
+:root{--bg:#0c1217;--panel:#141e26;--line:#293843;--txt:#edf3f5;--sub:#a2b1bb;--accent:#8be0c6;--warn:#ffd086;--ok:#8be0c6;--remainder:#ffd086;--cutnum:#e8a0a5;--effnum:#95bce8;--banker:#b74f47;color-scheme:dark}
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;padding:28px 24px 60px}
@@ -66,7 +66,7 @@ th:first-child,td:first-child{text-align:left}
 #inputTable td:nth-child(3){width:29%}
 .unit{display:block;font-size:10px}
 .cut-cell{font-size:19px;font-weight:650;white-space:nowrap;color:#718590}
-.cut-cell.has-cut{color:var(--accent)}
+.cut-cell.has-cut{color:var(--cutnum)}
 .seat-clear{border:0;background:transparent;padding:0;width:34px;height:44px;color:var(--sub);font-size:20px}
 .errors{font-size:12px;color:var(--warn)}
 .errors:not(:empty){padding:12px 0}
@@ -87,7 +87,7 @@ th:first-child,td:first-child{text-align:left}
 .status p{font-size:12px;margin:4px 0;color:#c0cbc9}
 .plan{border-top:1px solid #655135;padding-top:12px;margin-top:14px}
 .plan-amount{display:flex;align-items:baseline;gap:8px}
-.plan-amount strong{font-size:32px;letter-spacing:-.04em;color:var(--warn)}
+.plan-amount strong{font-size:32px;letter-spacing:-.04em;color:var(--cutnum)}
 .plan-amount span{font-size:14px}
 .seat-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .seat-chip{border:1px solid #736047;border-radius:6px;padding:2px 7px;font:600 12px/1.6 monospace;color:#ffe7bc}
@@ -103,7 +103,13 @@ th:first-child,td:first-child{text-align:left}
 .rtable td{font-size:13px;padding:10px 4px}
 .rtable th{padding:10px 4px}
 .rtable tfoot td{font-weight:750;border-top:2px solid #54746a}
-.refund{color:var(--accent)}
+.refund,.cutnum{color:var(--cutnum)}
+.eff-col,.effnum{color:var(--effnum)}
+.rtable .rate-col{display:none}
+.rtable.show-rate .rate-col{display:table-cell;color:var(--cutnum)}
+.seat-rate-toggle{border:0;background:transparent;padding:0 3px;min-width:28px;color:var(--sub);font-size:inherit}
+.detail-scroll{overflow-x:auto}
+.rtable{white-space:nowrap}
 .guar-mark{font-size:10px;color:var(--warn)}
 .rates{font-size:12px;color:var(--sub);margin-top:12px}
 .preset-row{padding:18px;border:1px solid var(--line);border-radius:13px;margin-bottom:12px;display:flex;gap:18px}
@@ -174,7 +180,7 @@ h1{font-size:19px}
 <div id="coverView"></div><button id="hideZone" aria-label="計算画面を表示"></button>
 <div class="wrap">
 <header class="topbar">
-  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.1</span></h1></div></div>
+  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.2</span></h1></div></div>
   <div class="header-actions"><button id="helpBtn">使い方</button><button id="hideBtn" aria-label="計算画面を隠す">隠す</button></div>
 </header>
 <main id="calcView">
@@ -202,10 +208,10 @@ h1{font-size:19px}
 <h3>2. 席ごとのベットを入力する</h3><p>ドル入力なら $460 は「460」、100ドル換算なら「4.6」です。入力欄の見出しに単位を表示します。空欄と0はベットなし。金額は$10刻みです。</p>
 <h3>3. 共通カットと端数を確認する</h3><p><b>GPT標準</b>は、入力欄の右に共通カットを表示します。同額席に配りきれない分は、黄色い結果欄で<b>候補席・選ぶ人数・追加カット額</b>を案内します。共通カットに追加する金額です。</p><p>例：$400×8席、上限$3,000なら共通カットは$0。8席のうち2人から$100ずつ追加でカットします。誰を選ぶかは現場で判断してください。</p>
 <h3>計算方式の違い</h3><p><b>GPT標準：</b>チップ単位と最低保証を守り、最後の端数を人間が選びます。<br><b>従来方式：</b>四捨五入を基本に、残ったカットを人間が調整します。<br><b>$10単位：</b>$100チップの分割を許し、$10刻みで按分します。同額席の割り切れない分は戻し方を案内します。</p>
-<h3>操作のヒント</h3><p>×で1席を消去。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
+<h3>操作のヒント</h3><p>×で1席を消去。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。カット額はやわらかい赤、残る額は青です。席番号をタップすると、個別のカット率（カット額÷元のベット額、小数1桁）を表示・非表示にできます。追加カット前の割合です。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
 </div></section>
 <section id="settingsView" hidden><div class="card"><div class="step">TABLE SETTINGS</div><h2>卓の設定</h2><p class="settings-lead">A〜Dから使用する設定を選び、「この設定で計算」で反映します。</p><div id="presetList"></div><div id="settingsError" class="errors" role="alert"></div><div class="settings-actions"><button class="calc" id="settingsApply">この設定で計算</button></div></div></section>
-<footer class="footer">GPT版 v1.1 · 入力内容はこの端末で計算します</footer>
+<footer class="footer">GPT版 v1.2 · 入力内容はこの端末で計算します</footer>
 </div>
 
 <script>
@@ -216,6 +222,7 @@ let currentBetScale = 1;
 const CALCMODE_KEY = 'cut_gpt_calcmode';
 let calcMode = 'latest';  // 'latest' | 'old'
 let undoBets = null;
+let showSeatRate = false; // 元の版と同じ、席列タップで個人カット率を表示
 
 // ---- build input rows ----
 const tbody = document.querySelector('#inputTable tbody');
@@ -705,12 +712,12 @@ function renderSide(res, L, GUARANTEE) {
   const final = plans.length ? res.finalEffectiveTotal : res.effectiveTotal;
   let html = '';
   if (plans.length) {
-    html += `<div class="status pending" data-manual-cut><div class="status-label">人間判断 / 追加カットが必要</div><h3>あと ${fmt(res.remainder)} をカット</h3><p>共通カットに加えて、下の候補から選んでください。</p>`;
+    html += `<div class="status pending" data-manual-cut><div class="status-label">人間判断 / 追加カットが必要</div><h3>あと <span class="cutnum">${fmt(res.remainder)}</span> をカット</h3><p>共通カットに加えて、下の候補から選んでください。</p>`;
     plans.forEach(p => { html += `<div class="plan"><div class="plan-amount"><span>${p.seats.length}人のうち <b>${p.count}人</b>から</span><strong>${fmt(p.add)}</strong><span>ずつ</span></div><div class="seat-chips">${p.seats.map(s=>`<span class="seat-chip">席 ${s}</span>`).join('')}</div></div>`; });
-    html += `<p>追加カット合計 ${fmt(planned)}${final<L ? `。チップ単位などの制約で、調整後は上限より${fmt(L-final)}少なくなります。` : '。指定どおり切ると、上限ちょうどになります。'}</p></div>`;
+    html += `<p>追加カット合計 <span class="cutnum">${fmt(planned)}</span>${final<L ? `。チップ単位などの制約で、調整後は上限より${fmt(L-final)}少なくなります。` : '。指定どおり切ると、上限ちょうどになります。'}</p></div>`;
   } else if (pending) {
-    html += `<div class="status pending"><div class="status-label">人間判断 / 従来方式</div><h3>あと ${fmt(res.remainder)} をカット</h3><p>表のカットだけでは上限を超えています。</p>`;
-    (res.suggest||[]).forEach(p=>{html+=`<div class="plan">席${p.seat}から <b>${fmt(p.add)}</b> 追加カット</div>`;});
+    html += `<div class="status pending"><div class="status-label">人間判断 / 従来方式</div><h3>あと <span class="cutnum">${fmt(res.remainder)}</span> をカット</h3><p>表のカットだけでは上限を超えています。</p>`;
+    (res.suggest||[]).forEach(p=>{html+=`<div class="plan">席${p.seat}から <b class="cutnum">${fmt(p.add)}</b> 追加カット</div>`;});
     const left=res.remainder-(res.suggest||[]).reduce((v,p)=>v+p.add,0);
     if(left>0)html+=`<p>候補で配り切れない ${fmt(left)} は、別途調整してください。</p>`;
     html+='</div>';
@@ -720,12 +727,12 @@ function renderSide(res, L, GUARANTEE) {
     html+=`<div class="status"><div class="status-label">${res.state==='nocut'?'上限以内':'計算完了'}</div><h3>${res.state==='nocut'?'カットは不要です':res.diff===0?'上限ちょうどです':`上限まで ${fmt(-res.diff)} の余り`}</h3><p>${res.state==='nocut'?'入力したベットをそのまま残せます。':'各席のカット額を確認してください。'}</p></div>`;
   }
   if(res.searchFallback)html+='<div class="status pending"><p>通常の範囲で配分が見つからず、最低保証までのカットを表示しています。最小カットの保証はありません。</p></div>';
-  html+=`<div class="stats"><div class="stat"><span class="stat-label">${pending?'共通カット合計':'カット合計'}</span><b class="stat-val">${fmt(res.cutTotal)}</b><span class="stat-note">${pending?'追加カットを含みません':'各席のカット額の合計'}</span></div><div class="stat"><span class="stat-label">${plans.length?'調整後の有効ベット':pending?'有効ベット（調整前）':'有効ベット'}</span><b class="stat-val">${fmt(final)}</b><span class="stat-note">${plans.length?'追加カットを行った場合':pending?'まだ上限を超えています':`上限 ${fmt(L)}`}</span></div></div>`;
+  html+=`<div class="stats"><div class="stat"><span class="stat-label">${pending?'共通カット合計':'カット合計'}</span><b class="stat-val cutnum">${fmt(res.cutTotal)}</b><span class="stat-note">${pending?'追加カットを含みません':'各席のカット額の合計'}</span></div><div class="stat"><span class="stat-label">${plans.length?'調整後の有効ベット':pending?'有効ベット（調整前）':'有効ベット'}</span><b class="stat-val effnum">${fmt(final)}</b><span class="stat-note">${plans.length?'追加カットを行った場合':pending?'まだ上限を超えています':`上限 ${fmt(L)}`}</span></div></div>`;
   html+=`<div class="total-line"><span>ベット合計 / ${res.rows.length}席</span><b>${fmt(res.T)}</b></div>`;
-  if(plans.length) html+=`<div class="total-line"><span>共通＋追加のカット合計</span><b>${fmt(res.cutTotal+planned)}</b></div>`;
-  html+=`<details class="detail"><summary>席ごとの内訳を見る${pending?'（追加カット前）':''}</summary><table class="rtable"><thead><tr><th>席</th><th>ベット</th><th>残る額</th><th>カット</th></tr></thead><tbody>`;
-  res.rows.slice().sort((a,b)=>a.seat-b.seat).forEach(r=>{html+=`<tr><td>${r.seat}</td><td>${fmt(r.amount)}</td><td>${fmt(r.effective)}${GUARANTEE>0&&r.effective===Math.min(r.amount,GUARANTEE)?'<span class="guar-mark"> *</span>':''}</td><td class="refund">${fmt(r.cut)}</td></tr>`;});
-  html+=`</tbody><tfoot><tr><td>計</td><td>${fmt(res.T)}</td><td>${fmt(res.effectiveTotal)}</td><td>${fmt(res.cutTotal)}</td></tr></tfoot></table><div class="rates">${pending?'共通カット率':'カット率'} ${(res.cutTotal/res.T*100).toFixed(2)}% · * 最低保証で保護された席</div></details>`;
+  if(plans.length) html+=`<div class="total-line"><span>共通＋追加のカット合計</span><b class="cutnum">${fmt(res.cutTotal+planned)}</b></div>`;
+  html+=`<details class="detail"><summary>席ごとの内訳を見る${pending?'（追加カット前）':''}</summary><p class="hint">席番号をタップすると個別のカット率を表示します。</p><div class="detail-scroll"><table class="rtable${showSeatRate ? ' show-rate' : ''}"><thead><tr><th><button type="button" class="seat-cell seat-rate-toggle" aria-label="個別カット率の表示切替" aria-pressed="${showSeatRate}">席</button></th><th class="rate-col">率</th><th>ベット</th><th>残る額</th><th>カット</th></tr></thead><tbody>`;
+  res.rows.slice().sort((a,b)=>a.seat-b.seat).forEach(r=>{html+=`<tr><td><button type="button" class="seat-cell seat-rate-toggle" aria-label="席${r.seat}・個別カット率の表示切替" aria-pressed="${showSeatRate}">${r.seat}</button></td><td class="rate-col">${r.amount > 0 && r.cut > 0 ? (r.cut / r.amount * 100).toFixed(1) + '%' : '—'}</td><td>${fmt(r.amount)}</td><td class="eff-col">${fmt(r.effective)}${GUARANTEE>0&&r.effective===Math.min(r.amount,GUARANTEE)?'<span class="guar-mark"> *</span>':''}</td><td class="refund">${fmt(r.cut)}</td></tr>`;});
+  html+=`</tbody><tfoot><tr><td class="seat-cell">計</td><td class="rate-col">${res.T > 0 && res.cutTotal > 0 ? (res.cutTotal / res.T * 100).toFixed(1) + '%' : '—'}</td><td>${fmt(res.T)}</td><td class="eff-col">${fmt(res.effectiveTotal)}</td><td class="cutnum">${fmt(res.cutTotal)}</td></tr></tfoot></table></div><div class="rates">${pending?'共通カット率':'カット率'} ${(res.cutTotal/res.T*100).toFixed(2)}% · * 最低保証で保護された席</div></details>`;
   return html;
 }
 
@@ -799,6 +806,17 @@ document.getElementById('undoBtn').addEventListener('click',()=>{
   undoBets=null;document.getElementById('undoBtn').hidden=true;calculate();
 });
 document.getElementById('resultJump').addEventListener('click',()=>{document.getElementById('resultPanel').scrollIntoView({block:'start'});document.getElementById('resultPanel').focus({preventScroll:true});});
+
+// 元の版と同じ計算式・小数1桁・席列タップでの切替。
+document.getElementById('res').addEventListener('click', e => {
+  if (!e.target.closest('.seat-cell')) return;
+  showSeatRate = !showSeatRate;
+  const table = document.querySelector('.rtable');
+  if (table) {
+    table.classList.toggle('show-rate', showSeatRate);
+    table.querySelectorAll('.seat-rate-toggle').forEach(button => button.setAttribute('aria-pressed', String(showSeatRate)));
+  }
+});
 
 // ===== 計算モード切替（最新版 / 旧版）=====
 function syncCalcToggle() {
