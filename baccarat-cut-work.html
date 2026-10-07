@@ -216,6 +216,7 @@
       <div class="side-head">
         <h2>カット結果</h2>
         <div class="calc-toggle">
+          <button type="button" data-mode="high">高額配慮</button>
           <button type="button" data-mode="latest">最新版</button>
           <button type="button" data-mode="old">旧版</button>
           <button type="button" data-mode="fair">10単位</button>
@@ -239,6 +240,9 @@
         <li><b>賭け先ごとの上限ベット</b>：テーブルの上限額。合計がこれを超えるとカット計算が動きます。</li>
         <li><b>最低ベット保障</b>：カットされても各客に最低限残す額。<br>※最低保証の合計が上限を超える設定にすると、按分できず計算停止になります。</li>
       </ul>
+
+      <h3>高額配慮</h3>
+      <p>ベット額の中央値（2席だけなら低い方）の2倍を超える席は、超えた部分に応じて負担率を徐々に増やし、中・低額席を残しやすくします。最低保証とチップ単位を守るため、最新版と同じ結果になる場合もあります。</p>
 
       <h3>カットのルール</h3>
       <ul>
@@ -290,7 +294,7 @@ const INPUT_UNIT = 10;   // bets are computed in $10 steps (dollars)
 const UNIT100 = 100;     // cut granularity ($100 units)
 let currentBetScale = 1;
 const CALCMODE_KEY = 'cut_calcmode';
-let calcMode = 'latest';  // 'latest' | 'old'
+let calcMode = 'latest';  // 'high' | 'latest' | 'old' | 'fair'
 let showSeatRate = false;  // 詳細テーブルの個人カット率列の表示状態（保持しない）
 
 // ---- build input rows ----
@@ -337,7 +341,7 @@ function readBets() {
 const roundUnit = (x, u) => Math.round(x / u) * u;
 
 // ---- core computation (single pool) ----
-function computeSide(bets, L, GUARANTEE) {
+function computeSide(bets, L, GUARANTEE, allocation = 'proportional') {
   const T = bets.reduce((s, b) => s + b.amount, 0);
 
   if (bets.length === 0) return { state: 'none', T: 0 };
@@ -377,6 +381,31 @@ function computeSide(bets, L, GUARANTEE) {
       fixedSeats.add(b.seat);
     });
     active = active.filter(b => !newlyFixed.includes(b));
+  }
+
+  // 高額配慮: 中央値の2倍を超えた部分だけ、残す額の重みを滑らかに圧縮。
+  // 元のベットを上限・最低保証を下限として、重み付きの有効額合計をLへ合わせる。
+  // w(a)=a (a<=H), H*(1+log(a/H)) (a>H)。境界で値・傾きとも連続。
+  // a/w(a)が非減少なので、カット額と残額の順序を保つ理想値になる。
+  if (allocation === 'high') {
+    const ordered = bets.slice().sort((a,b) => a.amount-b.amount || a.seat-b.seat);
+    const amounts = ordered.map(b => b.amount);
+    const middle = Math.floor(amounts.length / 2);
+    const median = amounts.length % 2 ? amounts[middle] : (amounts[middle-1] + amounts[middle]) / 2;
+    const reference = amounts.length === 2 ? amounts[0] : median;
+    const threshold = 2 * reference;
+    const affectedSeats = ordered.filter(b => b.amount > threshold).map(b => b.seat);
+    if (affectedSeats.length) {
+      const weights = ordered.map(b => b.amount <= threshold ? b.amount : threshold * (1 + Math.log(b.amount / threshold)));
+      let low = 0, high = Math.max(...ordered.map((b,i) => b.amount / weights[i]));
+      for (let step = 0; step < 80; step++) {
+        const scale = (low + high) / 2;
+        const total = ordered.reduce((sum,b,i) => sum + Math.min(b.amount, Math.max(floor[b.seat], scale * weights[i])), 0);
+        if (total < L) low = scale; else high = scale;
+      }
+      const scale = (low + high) / 2;
+      ordered.forEach((b,i) => rawEff[b.seat] = Math.min(b.amount, Math.max(floor[b.seat], scale * weights[i])));
+    }
   }
 
   // ---- per-seat cut selection（逆転禁止・$100チップ非割れ・上限非超過のDP）----
@@ -936,7 +965,7 @@ function calculate() {
   }
 
   const fn = calcMode === 'old' ? computeSideOld : calcMode === 'fair' ? computeSideFair : computeSide;
-  const res = fn(b.bets, s.L, s.GUARANTEE);
+  const res = fn(b.bets, s.L, s.GUARANTEE, calcMode === 'high' ? 'high' : 'proportional');
   document.getElementById('res').innerHTML = renderSide(res, s.L, s.GUARANTEE);
   updateInlineCuts(res);
 }
@@ -1029,7 +1058,7 @@ function loadPrefs() {
     const a = Number(localStorage.getItem(ACTIVE_KEY));
     if (Number.isInteger(a) && a >= 0 && a < 4) activeIdx = a;
     const cm = localStorage.getItem(CALCMODE_KEY);
-    if (cm === 'old' || cm === 'latest' || cm === 'fair') calcMode = cm;   // 不正値は無視
+    if (cm === 'high' || cm === 'old' || cm === 'latest' || cm === 'fair') calcMode = cm;   // 不正値は無視
   } catch (e) { /* localStorage unavailable -> defaults */ }
 }
 function savePresets() { try { localStorage.setItem(PRESETS_KEY, JSON.stringify(presets)); } catch (e) {} }
