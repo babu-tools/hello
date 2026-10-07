@@ -183,7 +183,7 @@ h1{font-size:19px}
 <div id="coverView"></div><button id="hideZone" aria-label="計算画面を表示"></button>
 <div class="wrap">
 <header class="topbar">
-  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.5</span></h1></div></div>
+  <div class="brand"><div class="brand-icon" aria-hidden="true">÷</div><div><div class="eyebrow">TABLE TOOLS / GPT</div><h1>カット計算<span class="version">v1.6</span></h1></div></div>
   <div class="header-actions"><button id="helpBtn">使い方</button><button id="hideBtn" aria-label="計算画面を隠す"></button></div>
 </header>
 <main id="calcView">
@@ -210,11 +210,11 @@ h1{font-size:19px}
 <h3>1. 卓の設定を確認する</h3><p>上部に上限と最低保証を表示します。A〜Dの設定を使い分けられます。記号を押すと、上限・保証・入力単位を変更できます。</p>
 <h3>2. 席ごとのベットを入力する</h3><p>ドル入力なら $460 は「460」、100ドル換算なら「4.6」です。入力欄の見出しに単位を表示します。空欄と0はベットなし。金額は$10刻みです。</p>
 <h3>3. 共通カットと端数を確認する</h3><p><b>高額配慮・比例配分</b>は、入力欄の右に共通カットを表示します。同額席に配りきれない分は、黄色い結果欄で<b>候補席・選ぶ人数・追加カット額</b>を案内します。共通カットに追加する金額です。</p><p>例：$400×8席、上限$3,000なら共通カットは$0。8席のうち2人から$100ずつ追加でカットします。誰を選ぶかは現場で判断してください。</p>
-<h3>計算方式の違い</h3><p><b>高額配慮：</b>ベットの中央値（2席だけの場合は低い方）の2倍を超える高額席は、超えた部分に応じて負担を徐々に増やします。最低保証・同額席の公平さ・残額の逆転防止を守ります。<br><b>比例配分：</b>これまでのGPT標準です。チップ単位と最低保証を守り、最後の端数を人間が選びます。<br><b>従来方式：</b>四捨五入を基本に、残ったカットを人間が調整します。<br><b>$10単位：</b>$100チップの分割を許し、$10刻みで按分します。同額席の割り切れない分は戻し方を案内します。</p>
+<h3>計算方式の違い</h3><p><b>高額配慮：</b>ベットの中央値（2席だけの場合は低い方）の2倍を超える高額席は、超えた部分に応じて負担を徐々に増やします。最低保証・同額席の公平さ・残額の逆転防止を守ります。<br><b>比例配分：</b>これまでのGPT標準です。チップ単位と最低保証を守り、最後の端数を人間が選びます。<br><b>従来方式：</b>四捨五入を基本に、残ったカットを人間が調整します。<br><b>$10単位：</b>$100チップの分割を許し、$10刻みで按分します。同額席は同じカットにし、ベットが大きいほどカット率も同じか高くします。最低保証と残額の順序も守り、上限ぴったりにできない場合は不足額を表示します。</p>
 <h3>操作のヒント</h3><p>入力表の席番号をタップすると、その席を消去できます。上部のベット合計は入力・消去に合わせて更新されます。「全てクリア」は直後に「元に戻す」で取り消せます。Enterで次の席へ進めます。詳細の内訳には各席のベット・残る額・カットを表示します。カット額はやわらかい赤、残る額は青です。席番号をタップすると、個別のカット率（カット額÷元のベット額、小数1桁）を表示・非表示にできます。追加カット前の割合です。</p><p>「隠す」で白い画面に切り替わります。右上をタップすると計算画面に戻れます。</p>
 </div></section>
 <section id="settingsView" hidden><div class="card"><div class="step">TABLE SETTINGS</div><h2>卓の設定</h2><p class="settings-lead">A〜Dから使用する設定を選び、「この設定で計算」で反映します。</p><div id="presetList"></div><div id="settingsError" class="errors" role="alert"></div><div class="settings-actions"><button class="calc" id="settingsApply">この設定で計算</button></div></div></section>
-<footer class="footer">GPT版 v1.5 · 入力内容はこの端末で計算します</footer>
+<footer class="footer">GPT版 v1.6 · 入力内容はこの端末で計算します</footer>
 </div>
 
 <script>
@@ -633,14 +633,8 @@ function computeSideOld(bets, L, GUARANTEE) {
   return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, remainder, candSeats, suggest };
 }
 
-// ---- core computation: 公平版（$10単位カット・完全公平按分） ----
-// 方針: 既存2版が持つ「$100チップ非分割(cut%100≤bet%100)」制約を撤廃し、$10単位で削る。
-//   ・前段は computeSide と同じ「保証床つき反復比例按分」で実数 rawEff(合計=L)を得る。
-//   ・rawEff を $10 粒度へ最大剰余法で丸め、有効ベット合計を上限ちょうど(=L)に合わせる。
-//   ・最低保証の床(min(bet,GUARANTEE))は維持。金額が異なる席は自動で上限ちょうど(diff=0)。
-//   ・例外: 同額ベットの席は$10単位で公平に割り切れないことがある(例: $400×8で1人$25が作れない)。
-//     その分は機械が勝手に振らず、同額席は全員同じカットにして残りを人間判断(tieRemainder)へ回す。
-//   ・逆転禁止: ベット昇順で cut・有効ベットとも非減少。同額グループ単位の配分でこれを保つ。
+// ---- $10単位: 同額同カット・ベット昇順のカット率/額/残額の逆転防止 ----
+// 上限内で総カット最小を優先。割り切れない不足額を人間判断で戻す案内はしない。
 function computeSideFair(bets, L, GUARANTEE) {
   const T = bets.reduce((s, b) => s + b.amount, 0);
 
@@ -680,41 +674,60 @@ function computeSideFair(bets, L, GUARANTEE) {
     active = active.filter(b => !newlyFixed.includes(b));
   }
 
-  // ---- $10粒度への丸め（同額グループ単位の最大剰余法）----
-  // 各席を floor10(rawEff) に落とし、残り単位(units)を $10 ずつ配って上限へ近づける。
-  // ただし配分は「同額ベットのグループ」単位でのみ行う（同額席は常に全員同じカット）。
-  // 端数(frac)の大きいグループから、グループ全員に $10 ずつ。配り切れないグループ
-  // (units < 人数) が来たら止め、残りは人間判断(tieRemainder)として候補席を提示する。
-  // → 金額が異なる席は最大剰余法で自動・上限ちょうど。同額で割り切れない分だけ人間が決める。
-  const eff = {};
-  bets.forEach(b => eff[b.seat] = Math.floor(rawEff[b.seat] / INPUT_UNIT) * INPUT_UNIT);
-  let units = Math.round((L - bets.reduce((s, b) => s + eff[b.seat], 0)) / INPUT_UNIT);
-
-  // 同額ベットでグループ化（eff を上げてもベットを超えない=cut≥0 の席だけが加点候補）
-  const groupsMap = {};
-  bets.filter(b => eff[b.seat] + INPUT_UNIT <= b.amount).forEach(b => {
-    (groupsMap[b.amount] = groupsMap[b.amount] || []).push(b.seat);
+  // 同額席をまとめ、カット率・カット額・残額の順序を守る$10単位の配分を探索。
+  // 理想カット±$300、必要カット+$900の範囲で、総カット最小→比例配分との誤差最小。
+  const grouped = new Map();
+  bets.slice().sort((a,b) => a.amount-b.amount || a.seat-b.seat).forEach(b => {
+    if (!grouped.has(b.amount)) grouped.set(b.amount, []);
+    grouped.get(b.amount).push(b.seat);
   });
-  const groups = Object.keys(groupsMap).map(a => ({
-    amount: Number(a), seats: groupsMap[a],
-    frac: rawEff[groupsMap[a][0]] - eff[groupsMap[a][0]]
-  })).sort((g1, g2) => g2.frac - g1.frac || g2.amount - g1.amount);
-
-  // frac の大きいグループから全員に $10。途中で配り切れないグループで停止（同額を割らない）。
-  let candSeats = [];
-  for (const g of groups) {
-    if (units >= g.seats.length) {
-      g.seats.forEach(s => eff[s] += INPUT_UNIT);
-      units -= g.seats.length;
-    } else {
-      if (units > 0) candSeats = g.seats.slice().sort((a, b) => a - b);
-      break;
+  const groups = Array.from(grouped, ([amount,seats]) => ({
+    amount: amount / INPUT_UNIT, seats,
+    ideal: (amount - rawEff[seats[0]]) / INPUT_UNIT,
+    max: (amount - floor[seats[0]]) / INPUT_UNIT
+  }));
+  const required = (T-L) / INPUT_UNIT;
+  const memo = new Map();
+  function solve(i, prevCut) {
+    if (i === groups.length) return new Map([[0, {dev:0}]]);
+    const key = `${i}:${prevCut}`;
+    if (memo.has(key)) return memo.get(key);
+    const g = groups[i], prev = groups[i-1];
+    const lo = Math.max(0, Math.floor(g.ideal)-30,
+      prev ? Math.ceil(prevCut*g.amount/prev.amount) : 0);
+    const hi = Math.min(g.max, Math.ceil(g.ideal)+30,
+      prev ? prevCut+g.amount-prev.amount : g.max);
+    const result = new Map();
+    for (let c=lo; c<=hi; c++) {
+      // 整数の交差積で、浮動小数点誤差による率の逆転を防ぐ。
+      if (prev && c*prev.amount < prevCut*g.amount) continue;
+      const sub = solve(i+1,c), total = c*g.seats.length;
+      for (const [rest, entry] of sub) {
+        const sum = total+rest;
+        if (sum > required+90) continue;
+        const dev = g.seats.length*Math.abs(c-g.ideal)+entry.dev;
+        if (!result.has(sum) || dev < result.get(sum).dev) result.set(sum,{dev,c,rest});
+      }
     }
+    memo.set(key,result);
+    return result;
   }
-  const tieRemainder = units * INPUT_UNIT;   // 同額のため上限まで配り切れず残った額（人間判断）
-
-  const cut = {};
-  bets.forEach(b => cut[b.seat] = b.amount - eff[b.seat]);
+  const root = solve(0,0);
+  let best = Infinity;
+  for (const total of root.keys()) if (total >= required && total < best) best = total;
+  const cut = {}, eff = {}, candSeats = [];
+  if (Number.isFinite(best)) {
+    let prevCut=0, remaining=best;
+    groups.forEach((g,i) => {
+      const entry=solve(i,prevCut).get(remaining);
+      g.seats.forEach(seat => cut[seat]=entry.c*INPUT_UNIT);
+      prevCut=entry.c; remaining=entry.rest;
+    });
+  } else {
+    // 共通の保証床は率・カット額・残額の順序をすべて守る安全な配分。
+    bets.forEach(b => cut[b.seat]=b.amount-floor[b.seat]);
+  }
+  bets.forEach(b => eff[b.seat]=b.amount-cut[b.seat]);
 
   const amtOf = {}; bets.forEach(b => amtOf[b.seat] = b.amount);
   const isGuarFixed = (s) => GUARANTEE > 0 && floor[s] === GUARANTEE && cut[s] === (amtOf[s] - floor[s]) && cut[s] > 0;
@@ -726,9 +739,10 @@ function computeSideFair(bets, L, GUARANTEE) {
   }));
   const effectiveTotal = rows.reduce((s, r) => s + r.effective, 0);
   const cutTotal = rows.reduce((s, r) => s + r.cut, 0);
-  const diff = effectiveTotal - L; // 同額の割り切れなさで上限を下回ったとき diff<0（tieRemainder と一致）
+  const diff = effectiveTotal - L; // 率順序や同額の制約で上限を下回ったとき diff<0
 
-  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff, tieRemainder, candSeats };
+  return { state: 'cut', T, ratio, rows, effectiveTotal, cutTotal, diff,
+    rateOrdered: true, rateRemainder: Math.max(0,-diff), candSeats, searchFallback: !Number.isFinite(best) };
 }
 
 // ---- render result (single pool) ----
@@ -756,6 +770,7 @@ function renderSide(res, L, GUARANTEE) {
   } else {
     html+=`<div class="status"><div class="status-label">${res.state==='nocut'?'上限以内':'計算完了'}</div><h3>${res.state==='nocut'?'カットは不要です':res.diff===0?'上限ちょうどです':`上限まで ${fmt(-res.diff)} の余り`}</h3><p>${res.state==='nocut'?'入力したベットをそのまま残せます。':'各席のカット額を確認してください。'}</p></div>`;
   }
+  if(res.rateOrdered) html += '<p class="hint policy-note">$10単位：ベットが大きいほどカット率も同じか高くなる配分です。同額席・最低保証・残額の順序を守るため、上限まで残せない場合があります。</p>';
   if(res.highBetPolicy) {
     const policy = res.highBetPolicy;
     html += `<p class="hint policy-note">${policy.affectedSeats.length ? `高額配慮：基準ベット ${fmt(policy.reference)} の2倍（${fmt(policy.threshold)}）を超える席${policy.affectedSeats.join('・席')}の負担を増やす配分です。チップ単位や最低保証により、比例配分と同じ結果になる場合もあります。` : `突出した高額席がないため、比例配分と同じです（基準：${fmt(policy.threshold)}超）。`}</p>`;
@@ -857,7 +872,7 @@ document.getElementById('res').addEventListener('click', e => {
 function syncCalcToggle() {
   document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>
     { b.classList.toggle('active', b.dataset.mode === calcMode); b.setAttribute('aria-pressed', String(b.dataset.mode === calcMode)); });
-  document.getElementById('modeHint').textContent = {high:'突出した高額席の負担を増やし、中・低額席を残します。最後の端数は人間判断。',latest:'従来のGPT標準。比例配分を基本に、最後の端数は人間判断。',old:'四捨五入を基本に、残りを手動で調整。',fair:'$100チップの分割を許し、$10刻みで按分。'}[calcMode];
+  document.getElementById('modeHint').textContent = {high:'突出した高額席の負担を増やし、中・低額席を残します。最後の端数は人間判断。',latest:'従来のGPT標準。比例配分を基本に、最後の端数は人間判断。',old:'四捨五入を基本に、残りを手動で調整。',fair:'$10刻みで按分。高いベットのカット率が低くならないよう調整します。'}[calcMode];
   document.querySelector('.cut-head').textContent=(calcMode==='latest'||calcMode==='high')?'共通カット':'カット額';
 }
 document.querySelectorAll('.calc-toggle button[data-mode]').forEach(b =>

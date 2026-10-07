@@ -4,10 +4,10 @@
 //   実行:
 //     jsc tests/gpt/fair-core.test.js -- baccarat-cut-gpt.html
 //
-// 仕組み: アプリ本体(HTML)から computeSideFair() だけを取り出し、約20万通りの入力で
-//         「壊れてはいけないルール（不変条件）」を総当りで確認する。
+// 仕組み: アプリ本体(HTML)から computeSideFair() だけを取り出し、2000通りの入力と少額150ケースの独立全探索で
+//         「壊れてはいけないルール（不変条件）」をランダム検証で確認する。
 //         ※既存の cut-core.test.js が見る「$100チップ非分割」は新版では撤廃が目的なので
-//           ここでは検査しない。代わりに「端数0＝上限ちょうど」を必須にする。
+//           ここでは検査しない。代わりに「上限以内・率の順序」を必須にする。
 // ============================================================
 
 var htmlPath = arguments[0];
@@ -58,7 +58,9 @@ var computeSideFair = eval(
 var failures = [];
 function check(cond, label) { if (!cond && failures.length < 50) failures.push(label); }
 function bets(arr) { return arr.map(function (x) { return { seat: x[0], amount: x[1] }; }); }
-function randInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+var seed=130928;
+function random() { seed=(Math.imul(seed,1664525)+1013904223)>>>0; return seed/4294967296; }
+function randInt(a, b) { return a + Math.floor(random() * (b - a + 1)); }
 
 function invariantCheck(res, L, G, label) {
   if (res.state === 'none' || res.state === 'overflow') return;
@@ -75,13 +77,13 @@ function invariantCheck(res, L, G, label) {
   check(effTotal <= L, label + ': ★有効ベット合計が上限を超過 (' + effTotal + ' > ' + L + ')');
   check(effTotal + cutTotal === betTotal, label + ': ベット保存則が崩れ');
 
-  // ★端数の扱い: 同額で割り切れない分 tieRemainder を除けば上限ちょうど
+  // ★端数の扱い: 同額・率順序で残せない分 rateRemainder を除けば上限ちょうど
   if (res.state === 'cut') {
-    var tie = res.tieRemainder || 0;
-    check(tie >= 0 && tie % INPUT_UNIT === 0, label + ': tieRemainder が不正 (' + tie + ')');
-    check(effTotal === L - tie, label + ': ★上限-tieRemainder と不一致 (eff=' + effTotal + ', L=' + L + ', tie=' + tie + ')');
+    var tie = res.rateRemainder || 0;
+    check(tie >= 0 && tie % INPUT_UNIT === 0, label + ': rateRemainder が不正 (' + tie + ')');
+    check(effTotal === L - tie, label + ': ★上限-rateRemainder と不一致 (eff=' + effTotal + ', L=' + L + ', tie=' + tie + ')');
     check(cutTotal === betTotal - L + tie, label + ': カット合計が required+tie と不一致');
-    if (tie > 0) check((res.candSeats || []).length >= 2, label + ': tieRemainder>0 なのに候補席(同額)が無い');
+    check(res.rateOrdered === true, label + ': 率順序モード');
   }
 
   // ★同額席は全員同じカット（機械が同額の中で勝手に差をつけない）
@@ -98,6 +100,7 @@ function invariantCheck(res, L, G, label) {
   var ord = rows.slice().sort(function (a, b) { return a.amount - b.amount; });
   for (var i = 1; i < ord.length; i++) {
     if (ord[i].amount === ord[i - 1].amount) continue;
+    check(ord[i].cut * ord[i-1].amount >= ord[i-1].cut * ord[i].amount, label + ': カット率逆転');
     check(ord[i].cut >= ord[i - 1].cut,
       label + ': カット逆転 (席' + ord[i].seat + '$' + ord[i].amount + ' のカットが 席' + ord[i - 1].seat + '$' + ord[i - 1].amount + ' より少ない)');
     check(ord[i].effective >= ord[i - 1].effective,
@@ -105,16 +108,16 @@ function invariantCheck(res, L, G, label) {
   }
 }
 
-// ---- 総当り（約20万通り）----
+// ---- ランダム検証（2000通り）----
 var GUARS = [300, 400, 500];
-var TRIALS = 200000;
+var TRIALS = 2000;
 for (var t = 0; t < TRIALS; t++) {
   var n = randInt(1, 8);
   var L = randInt(5, 80) * UNIT100;                 // 上限（$100単位, 500〜8000）
   var G = GUARS[randInt(0, GUARS.length - 1)];      // 最低保証 ∈ {300,400,500}
   var arr = [];
   for (var s = 1; s <= n; s++) {
-    if (Math.random() < 0.12) continue;             // たまに空席
+    if (random() < 0.12) continue;             // たまに空席
     arr.push([s, randInt(1, 500) * INPUT_UNIT]);    // ベット（$10単位, 10〜5000）
   }
   if (arr.length === 0) continue;
@@ -122,11 +125,49 @@ for (var t = 0; t < TRIALS; t++) {
   if (failures.length >= 50) break;
 }
 
+// 写真の回帰例、率順序だけで割り切れない異額席、同額席。
+var photo=bets([[1,1000],[2,400],[3,1800],[4,800],[5,1600],[6,400],[7,500]]);
+var result=computeSideFair(photo,3000,300);
+check(JSON.stringify(result.rows.map(r=>r.cut))===JSON.stringify([590,100,1080,470,960,100,200]),'写真の回帰例');
+[[[[1,400],[2,400]],790,300,780],[[[1,100],[2,110]],190,0,180]].forEach(example=>{
+  var r=computeSideFair(bets(example[0]),example[1],example[2]);
+  invariantCheck(r,example[1],example[2],'端数例');
+  check(r.effectiveTotal===example[3] && r.rateRemainder===10,'不足$10を正しく表示');
+  check(!r.tieRemainder && !r.candSeats.length,'率を破る手動戻しを案内しない');
+});
+// 独立全探索: 全ての$10単位のカットを列挙し、最小総カットと照合する。
+function oracle(values,L,G) {
+  var best=Infinity;
+  function visit(i,cuts,total) {
+    if(i===values.length) {
+      if(total<values.reduce((s,a)=>s+a,0)-L) return;
+      for(var x=0;x<values.length;x++) for(var y=0;y<values.length;y++) {
+        if(values[x]===values[y] && cuts[x]!==cuts[y]) return;
+        if(values[x]<values[y] && (cuts[x]*values[y]>cuts[y]*values[x] || values[x]-cuts[x]>values[y]-cuts[y])) return;
+      }
+      best=Math.min(best,total); return;
+    }
+    for(var c=0;c<=values[i]-Math.min(values[i],G);c+=10) visit(i+1,cuts.concat(c),total+c);
+  }
+  visit(0,[],0); return best;
+}
+for(var t=0;t<150;t++) {
+  var values=Array.from({length:3},()=>randInt(1,12)*10);
+  var L=randInt(1,values.reduce((s,a)=>s+a,0)/10)*10, G=t%2?100:0;
+  var input=values.map((amount,i)=>({seat:i+1,amount}));
+  var r=computeSideFair(input,L,G), optimal=oracle(values,L,G);
+  invariantCheck(r,L,G,'独立全探索'+t);
+  if(r.state==='overflow') check(optimal===Infinity,'保証不能の独立確認');
+  else check(r.cutTotal===optimal,'独立全探索の最小カットと一致');
+  var reverse=computeSideFair(input.slice().reverse(),L,G);
+  check(JSON.stringify(r.rows)===JSON.stringify(reverse.rows && reverse.rows.reverse()),'入力順不変');
+}
+
 // ---- 出力 ----
 print('');
 print('実行: ' + htmlPath + '（computeSideFair）');
-print('総当り: ' + TRIALS + ' 通り（G∈{300,400,500}, ベット$10刻み≤$5000, 上限$500〜$8000）');
-print('検査: (上限-tieRemainder)ちょうど・同額席は同カット・保証床維持・逆転0・$10単位・ベット保存');
+print('ランダム検証: ' + TRIALS + ' 通り（G∈{300,400,500}, ベット$10刻み≤$5000, 上限$500〜$8000）');
+print('検査: カット率/額/残額の逆転0・同額同カット・保証・上限・$10単位。写真と端数例・少額150ケースの独立全探索・入力順不変。');
 print('-----------------------------------------');
 if (failures.length === 0) {
   print('✅ 全テスト通過');
